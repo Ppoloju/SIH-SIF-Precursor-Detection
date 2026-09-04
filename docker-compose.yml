@@ -1,0 +1,29 @@
+# Local PostgreSQL for the SIF Precursor Detection platform.
+#
+# Start it with:   docker compose up -d
+# Then point the backend at it (see backend/.env.example):
+#   DATABASE_URL=postgresql+psycopg://sif:sif@localhost:5432/sif_detection
+#
+# The backend creates the schema automatically on startup and re-seeds the
+# clearly-labeled synthetic demo dataset when the database is empty.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sif-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sif
+      POSTGRES_PASSWORD: sif
+      POSTGRES_DB: sif_detection
+    ports:
+      - "5432:5432"
+    volumes:
+      - sif_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sif -d sif_detection"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  sif_pgdata:

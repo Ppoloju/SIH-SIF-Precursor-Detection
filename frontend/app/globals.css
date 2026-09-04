@@ -1,0 +1,536 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Design tokens — light (default) and dark (.dark on <html>).
+   Palette: deep-navy primary, charcoal ink, light-gray canvas,
+   white surfaces. Red/orange = danger, amber = warning,
+   green = validated, violet = the single AI accent.
+   ============================================================ */
+:root {
+  --bg: #eef1f6; /* page canvas — light gray */
+  --fg: #1e2836;
+  --sif: #2e5f94; /* SIF chart emphasis */
+  --sif-soft: #dde9f6;
+  --pop-bg: #ffffff; /* recharts tooltip */
+  --pop-line: #c2d6ed;
+  --pop-fg: #1e2836;
+  --pop-shadow: 0 12px 32px -12px rgba(15, 23, 42, 0.18);
+  --chart-text: #55647c; /* svg text (axes, legend) */
+  --focus-ring: #2e5f94;
+  color-scheme: light;
+}
+
+html.dark {
+  --bg: #0b1424;
+  --fg: #dbe4f1;
+  --sif: #8fb5e2;
+  --sif-soft: #1b2b49;
+  --pop-bg: #141e33;
+  --pop-line: #2e456f;
+  --pop-fg: #e2e9f4;
+  --pop-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+  --chart-text: #9aa9bf;
+  --focus-ring: #8fb5e2;
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+::selection {
+  background: #c2d6ed;
+  color: #142b47;
+}
+html.dark ::selection {
+  background: #2e456f;
+  color: #eaf1fa;
+}
+
+/* Subtle, on-brand scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #b9c9de transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #c9d7e8;
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #a9bed8;
+}
+html.dark * {
+  scrollbar-color: #33476b transparent;
+}
+html.dark *::-webkit-scrollbar-thumb {
+  background: #33476b;
+  border-color: #0b1424;
+}
+html.dark *::-webkit-scrollbar-thumb:hover {
+  background: #43608f;
+}
+
+/* Ambient page glow (used in layout.tsx) */
+.ambient {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  height: 18rem;
+  z-index: -10;
+  pointer-events: none;
+  background:
+    radial-gradient(720px 260px at 70% -80px, rgba(65, 120, 174, 0.1), transparent 70%),
+    radial-gradient(560px 220px at 15% -100px, rgba(103, 150, 201, 0.07), transparent 70%);
+}
+html.dark .ambient {
+  background:
+    radial-gradient(720px 260px at 70% -80px, rgba(65, 120, 174, 0.16), transparent 70%),
+    radial-gradient(560px 220px at 15% -100px, rgba(103, 150, 201, 0.09), transparent 70%);
+}
+
+@layer base {
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+  }
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-brand-100 bg-white p-5 shadow-soft;
+  }
+  .card-title {
+    @apply flex items-center gap-2 text-base font-bold tracking-tight;
+  }
+  .kicker {
+    @apply inline-block rounded-full border border-brand-200 bg-brand-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-brand-600;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-brand-700 hover:shadow-lg active:scale-[.98];
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 active:scale-[.98];
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold;
+  }
+  .badge-pink {
+    @apply bg-brand-100 text-brand-700;
+  }
+  .badge-red {
+    @apply bg-red-100 text-red-700;
+  }
+  .badge-orange {
+    @apply bg-orange-100 text-orange-700;
+  }
+  .badge-green {
+    @apply bg-green-100 text-green-700;
+  }
+  .badge-gray {
+    @apply bg-slate-100 text-slate-600;
+  }
+  .field {
+    @apply w-full rounded-xl border border-brand-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink-muted/70 focus:border-brand-400 focus:ring-2 focus:ring-brand-100;
+  }
+  .field-label {
+    @apply text-[11px] font-bold uppercase tracking-wider text-ink-muted;
+  }
+  .table-head {
+    @apply border-b border-brand-100 text-[11px] uppercase tracking-wider text-ink-muted;
+  }
+  .table-row {
+    @apply border-b border-brand-50 transition-colors hover:bg-brand-50/50;
+  }
+}
+
+/* Table wrapper: rounded scroll region with a hairline border */
+.table-wrap {
+  @apply overflow-x-auto rounded-xl border border-brand-100;
+}
+
+/* Focus ring parity for mouse users */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Recharts svg text follows the theme */
+.recharts-text {
+  fill: var(--chart-text);
+}
+
+/* ============================================================
+   DARK MODE — .dark overrides on <html>
+   Surfaces, chips, borders and text re-tint while semantic hues
+   (red/amber/green) and the violet AI accent keep their meaning.
+   ============================================================ */
+
+/* --- surfaces ------------------------------------------------- */
+html.dark .bg-white {
+  background-color: #101a2c;
+}
+html.dark .bg-white\/80 {
+  background-color: rgb(16 26 44 / 0.8);
+}
+html.dark .bg-white\/85 {
+  background-color: rgb(16 26 44 / 0.85);
+}
+html.dark .bg-white\/95 {
+  background-color: rgb(16 26 44 / 0.95);
+}
+
+/* --- brand (navy): backgrounds -------------------------------- */
+html.dark .bg-brand-50 {
+  background-color: #141f38;
+}
+html.dark .bg-brand-50\/40 {
+  background-color: rgb(20 31 56 / 0.4);
+}
+html.dark .bg-brand-50\/50 {
+  background-color: rgb(20 31 56 / 0.5);
+}
+html.dark .bg-brand-50\/60 {
+  background-color: rgb(20 31 56 / 0.6);
+}
+html.dark .bg-brand-100 {
+  background-color: #1b2b49;
+}
+html.dark .bg-brand-100\/50 {
+  background-color: rgb(27 43 73 / 0.5);
+}
+html.dark .bg-brand-100\/60 {
+  background-color: rgb(27 43 73 / 0.6);
+}
+html.dark .bg-brand-200\/40 {
+  background-color: rgb(38 58 94 / 0.4);
+}
+html.dark .hover\:bg-brand-50:hover {
+  background-color: #141f38;
+}
+html.dark .hover\:bg-brand-100:hover {
+  background-color: #1b2b49;
+}
+html.dark .hover\:bg-brand-100\/60:hover {
+  background-color: rgb(27 43 73 / 0.6);
+}
+
+/* --- brand text ------------------------------------------------ */
+html.dark .text-brand-400 {
+  color: #7fa9d9;
+}
+html.dark .text-brand-500 {
+  color: #90b4e1;
+}
+html.dark .text-brand-600 {
+  color: #a7c8ef;
+}
+html.dark .text-brand-700 {
+  color: #bcd6f5;
+}
+html.dark .hover\:text-brand-700:hover {
+  color: #bcd6f5;
+}
+html.dark .hover\:text-brand-900:hover {
+  color: #d6e3f6;
+}
+
+/* --- brand borders / rings ------------------------------------- */
+html.dark .border-brand-50 {
+  border-color: #1e2d4a;
+}
+html.dark .border-brand-100 {
+  border-color: #24375c;
+}
+html.dark .border-brand-200 {
+  border-color: #2e456f;
+}
+html.dark .border-brand-300 {
+  border-color: #3d5a8a;
+}
+html.dark .divide-brand-50 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e2d4a;
+}
+html.dark .hover\:border-brand-300:hover {
+  border-color: #4d6fa3;
+}
+html.dark .hover\:border-brand-400:hover {
+  border-color: #5f87bd;
+}
+html.dark .focus\:border-brand-400:focus {
+  border-color: #6f9fd8;
+}
+html.dark .focus\:ring-brand-100:focus {
+  --tw-ring-color: #2b3f63;
+}
+html.dark .border-t-brand-600 {
+  border-top-color: #8fb5e2;
+}
+html.dark .border-l-brand-500 {
+  border-left-color: #90b4e1;
+}
+
+/* --- gradient whites (hero cards / footer) --------------------- */
+html.dark .from-white {
+  --tw-gradient-from: #101a2c;
+}
+html.dark .via-white {
+  /* Tailwind bakes the via color into --tw-gradient-stops (not a var chain),
+     so the stops var itself must be re-emitted for dark mode. */
+  --tw-gradient-stops: var(--tw-gradient-from),
+    #101a2c var(--tw-gradient-via-position),
+    var(--tw-gradient-to);
+}
+html.dark .to-white {
+  --tw-gradient-to: #101a2c;
+}
+html.dark .from-brand-50 {
+  --tw-gradient-from: #1b2b49;
+}
+html.dark .from-brand-50\/60 {
+  --tw-gradient-from: rgb(27 43 73 / 0.6);
+}
+html.dark .to-brand-50\/70 {
+  --tw-gradient-to: rgb(27 43 73 / 0.7);
+}
+
+/* --- ink text -------------------------------------------------- */
+html.dark .text-ink {
+  color: #e2e9f4;
+}
+html.dark .text-ink-soft {
+  color: #b6c3d6;
+}
+html.dark .text-ink-muted {
+  color: #8b99ad;
+}
+
+/* --- semantic hues: backgrounds -------------------------------- */
+html.dark .bg-red-50 {
+  background-color: #2a1317;
+}
+html.dark .bg-red-100 {
+  background-color: #401d24;
+}
+html.dark .hover\:bg-red-100:hover {
+  background-color: #401d24;
+}
+html.dark .bg-orange-50 {
+  background-color: #2c1508;
+}
+html.dark .bg-orange-100 {
+  background-color: #4a2410;
+}
+html.dark .hover\:bg-orange-50:hover {
+  background-color: #2c1508;
+}
+html.dark .bg-amber-50 {
+  background-color: #2a2008;
+}
+html.dark .bg-green-50 {
+  background-color: #0d2317;
+}
+html.dark .bg-green-50\/60 {
+  background-color: rgb(13 35 23 / 0.6);
+}
+html.dark .bg-green-100 {
+  background-color: #143324;
+}
+html.dark .hover\:bg-green-50:hover {
+  background-color: #0d2317;
+}
+html.dark .bg-violet-50 {
+  background-color: #201638;
+}
+html.dark .bg-violet-50\/60 {
+  background-color: rgb(32 22 56 / 0.6);
+}
+html.dark .bg-violet-100 {
+  background-color: #2b1d4c;
+}
+html.dark .hover\:bg-violet-100:hover {
+  background-color: #2b1d4c;
+}
+html.dark .bg-slate-100 {
+  background-color: #233043;
+}
+
+/* --- semantic hues: text --------------------------------------- */
+html.dark .text-red-500 {
+  color: #f87171;
+}
+html.dark .text-red-600 {
+  color: #fca5a5;
+}
+html.dark .text-red-700 {
+  color: #fecaca;
+}
+html.dark .text-orange-600 {
+  color: #fdba74;
+}
+html.dark .text-orange-700 {
+  color: #fdba74;
+}
+html.dark .text-amber-600 {
+  color: #fcd34d;
+}
+html.dark .text-amber-700 {
+  color: #fde68a;
+}
+html.dark .text-amber-800 {
+  color: #fde68a;
+}
+html.dark .text-amber-900 {
+  color: #fde68a;
+}
+html.dark .text-green-600 {
+  color: #86efac;
+}
+html.dark .text-green-700 {
+  color: #a7f3d0;
+}
+html.dark .text-green-800 {
+  color: #bbf7d0;
+}
+html.dark .text-violet-600 {
+  color: #c4b5fd;
+}
+html.dark .text-violet-700 {
+  color: #c4b5fd;
+}
+html.dark .text-violet-800 {
+  color: #ddd6fe;
+}
+html.dark .text-slate-600 {
+  color: #cbd5e1;
+}
+html.dark .text-slate-700 {
+  color: #cbd5e1;
+}
+
+/* --- semantic hues: borders ------------------------------------ */
+html.dark .border-red-200 {
+  border-color: #5b2930;
+}
+html.dark .border-red-500 {
+  border-color: #ef6a63;
+}
+html.dark .border-orange-200 {
+  border-color: #6b3a15;
+}
+html.dark .border-orange-500 {
+  border-color: #fb923c;
+}
+html.dark .border-amber-200 {
+  border-color: #58461a;
+}
+html.dark .border-amber-500 {
+  border-color: #f59e0b;
+}
+html.dark .border-green-100 {
+  border-color: #1c3a29;
+}
+html.dark .border-green-200 {
+  border-color: #224a33;
+}
+html.dark .border-green-500 {
+  border-color: #4ade80;
+}
+html.dark .border-violet-100 {
+  border-color: #39275f;
+}
+html.dark .border-violet-200 {
+  border-color: #46326e;
+}
+
+/* --- component classes (@apply is baked at build time) ---------- */
+html.dark .card {
+  background-color: #101a2c;
+  border-color: #24375c;
+}
+html.dark .kicker {
+  background-color: #1b2b49;
+  border-color: #2e456f;
+  color: #a7c8ef;
+}
+html.dark .btn-ghost {
+  background-color: #101a2c;
+  border-color: #2e456f;
+  color: #bcd6f5;
+}
+html.dark .btn-ghost:hover {
+  border-color: #5f87bd;
+  background-color: #141f38;
+}
+html.dark .badge-pink {
+  background-color: #1b2b49;
+  color: #bcd6f5;
+}
+html.dark .badge-red {
+  background-color: #401d24;
+  color: #fecaca;
+}
+html.dark .badge-orange {
+  background-color: #4a2410;
+  color: #fdba74;
+}
+html.dark .badge-green {
+  background-color: #143324;
+  color: #a7f3d0;
+}
+html.dark .badge-gray {
+  background-color: #233043;
+  color: #cbd5e1;
+}
+html.dark .field {
+  background-color: #0d1526;
+  border-color: #2e456f;
+  color: #e2e9f4;
+}
+html.dark .field::placeholder {
+  color: #66748a;
+}
+html.dark .table-head {
+  border-color: #24375c;
+  color: #9aa9bf;
+}
+html.dark .table-row {
+  border-color: #1e2d4a;
+}
+html.dark .table-row:hover {
+  background-color: rgb(20 31 56 / 0.45);
+}
+html.dark .table-wrap {
+  border-color: #24375c;
+}
+
+/* Native inputs / selects in dark */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  color-scheme: dark;
+}
