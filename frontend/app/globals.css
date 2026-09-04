@@ -154,6 +154,41 @@ html.dark .ambient {
   .badge-gray {
     @apply bg-slate-100 text-slate-600;
   }
+  /* HSE review-status pills — tinted background, hairline border and a
+     colored status dot (pulsing gently while pending), like real-world
+     SaaS dashboards. */
+  .status-pill {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-semibold;
+  }
+  .status-pill-pending {
+    @apply border-slate-200 bg-slate-50 text-slate-600;
+  }
+  .status-pill-reviewed,
+  .status-pill-confirmed {
+    @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+  }
+  .status-pill-rejected {
+    @apply border-red-200 bg-red-50 text-red-700;
+  }
+  .status-pill-edited {
+    @apply border-brand-200 bg-brand-50 text-brand-700;
+  }
+  .status-dot {
+    @apply h-1.5 w-1.5 flex-shrink-0 rounded-full;
+  }
+  .status-dot-pending {
+    @apply bg-slate-400;
+  }
+  .status-dot-reviewed,
+  .status-dot-confirmed {
+    @apply bg-emerald-500;
+  }
+  .status-dot-rejected {
+    @apply bg-red-500;
+  }
+  .status-dot-edited {
+    @apply bg-brand-500;
+  }
   .field {
     @apply w-full rounded-xl border border-brand-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink-muted/70 focus:border-brand-400 focus:ring-2 focus:ring-brand-100;
   }
@@ -529,6 +564,40 @@ html.dark .badge-gray {
   background-color: #233043;
   color: #cbd5e1;
 }
+html.dark .status-pill-pending {
+  background-color: #233043;
+  border-color: #3a4a63;
+  color: #cbd5e1;
+}
+html.dark .status-pill-reviewed,
+html.dark .status-pill-confirmed {
+  background-color: #143324;
+  border-color: #1f4a33;
+  color: #a7f3d0;
+}
+html.dark .status-pill-rejected {
+  background-color: #401d24;
+  border-color: #5e2a33;
+  color: #fecaca;
+}
+html.dark .status-pill-edited {
+  background-color: #1b2b49;
+  border-color: #2e456f;
+  color: #bcd6f5;
+}
+html.dark .status-dot-pending {
+  background-color: #94a3b8;
+}
+html.dark .status-dot-reviewed,
+html.dark .status-dot-confirmed {
+  background-color: #34d399;
+}
+html.dark .status-dot-rejected {
+  background-color: #f87171;
+}
+html.dark .status-dot-edited {
+  background-color: #6ea8e0;
+}
 html.dark .field {
   background-color: #0d1526;
   border-color: #2e456f;
@@ -557,3 +626,4 @@ html.dark select,
 html.dark textarea {
   color-scheme: dark;
 }
+

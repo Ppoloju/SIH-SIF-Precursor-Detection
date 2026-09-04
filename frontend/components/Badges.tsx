@@ -1,4 +1,3 @@
-import { BadgeCheck, CircleDashed, Clock, PencilLine, X } from "lucide-react";
 import type { Priority, ReviewStatus } from "@/lib/api";
 
 export function SifBadge({ sif }: { sif: boolean }) {
@@ -36,12 +35,24 @@ export const VERIFIED_STATUSES: ReviewStatus[] = [
 ];
 export const isVerified = (s: ReviewStatus) => VERIFIED_STATUSES.includes(s);
 
-const REVIEW_CLASSES: Record<ReviewStatus, string> = {
-  pending: "badge-gray",
-  reviewed: "badge-green",
-  confirmed: "badge-green",
-  rejected: "badge-orange",
-  edited: "badge-pink",
+// Modern status pills: a tinted background with a hairline border and a
+// colored dot (pulsing gently while pending) — the pattern used by real-world
+// SaaS dashboards. Colors stay semantic: slate = needs attention, green =
+// checked/verified, red = rejected, brand-blue = edited.
+const REVIEW_PILL: Record<ReviewStatus, string> = {
+  pending: "status-pill status-pill-pending",
+  reviewed: "status-pill status-pill-reviewed",
+  confirmed: "status-pill status-pill-confirmed",
+  rejected: "status-pill status-pill-rejected",
+  edited: "status-pill status-pill-edited",
+};
+
+const REVIEW_DOT: Record<ReviewStatus, string> = {
+  pending: "status-dot status-dot-pending animate-pulseDot",
+  reviewed: "status-dot status-dot-reviewed",
+  confirmed: "status-dot status-dot-confirmed",
+  rejected: "status-dot status-dot-rejected",
+  edited: "status-dot status-dot-edited",
 };
 
 const REVIEW_TITLES: Record<ReviewStatus, string> = {
@@ -52,22 +63,13 @@ const REVIEW_TITLES: Record<ReviewStatus, string> = {
   edited: "HSE corrected AI values (priority / Life-Saving Rule / comments)",
 };
 
-const REVIEW_ICONS: Record<ReviewStatus, typeof Clock> = {
-  pending: CircleDashed,
-  reviewed: BadgeCheck,
-  confirmed: BadgeCheck,
-  rejected: X,
-  edited: PencilLine,
-};
-
 export function ReviewBadge({ status }: { status: ReviewStatus }) {
-  const Icon = REVIEW_ICONS[status];
   return (
     <span
-      className={`badge ${REVIEW_CLASSES[status]}`}
+      className={REVIEW_PILL[status]}
       title={`HSE review status — ${REVIEW_TITLES[status]}`}
     >
-      <Icon size={11} strokeWidth={2.4} />
+      <span aria-hidden className={REVIEW_DOT[status]} />
       {REVIEW_LABELS[status]}
     </span>
   );
