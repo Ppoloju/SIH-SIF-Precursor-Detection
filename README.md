@@ -18,27 +18,7 @@ This is a **prototype for SIH demonstration**. It uses **synthetic demo data** (
 
 OIL collects large volumes of safety reports through its HSSE platform — Unsafe Acts (UA), Unsafe Conditions (UC), Near-Misses and Incidents — much of it free text. A report that **looks low-severity may still contain conditions with genuine Serious Injury or Fatality potential**. Manual periodic triage makes it hard to find these precursors early and to see where the same problems recur.
 
-## Our Solution
 
-An **AI Safety Early-Warning & SIF Precursor Intelligence Platform** that:
-
-1. Ingests free-text safety reports (UA / UC / near-miss / incident).
-2. Detects potential SIF precursors with a **hybrid, explainable NLP pipeline**.
-3. Shows **evidence** — the exact phrases that triggered the flag.
-4. Extracts hazard, potential consequence, barrier failure, activity, equipment.
-5. Maps reports to the relevant **Life-Saving Rule** — the canonical ten: Work Authorization, Energy Isolation, Bypassing Safety Controls, Confined Space Entry, Working at Height, Safe Mechanical Lifting, Toxic Gas Safety, Driving Safety, Line of Fire, Hot Work Safety.
-6. Assigns a transparent **AI-assisted priority** (HIGH / MEDIUM / LOW) — prototype methodology.
-7. Surfaces **recurring patterns** (e.g. repeated energy-isolation failures during maintenance) — never fabricated.
-8. Links **similar historical reports** — every stored report, dashboard row and fresh analysis shows its closest past matches with click-through.
-9. Provides an **HSE dashboard** and a **human-in-the-loop review + retraining workflow** where HSE experts confirm, reject or correct AI results and re-train the decision signals on those labels.
-10. **Dedicated HSE Reviewer workspace** (`/review`) — a separate inbox from the general Reports registry so reviewers are never lost among search/export/admin controls. It shows exactly what still needs a human decision (with a live pending-count badge in the nav), lets the reviewer **Verify as SIF / Not SIF** in one click, and lists verified and rejected records with clear, distinct badges ("Needs HSE review" vs "HSE verified" vs "Rejected · not SIF").
-11. **Missing-field intelligence made visible** — every report page shows a *Field Coverage* panel: each field is tagged **Source file** (authoritative when the file provides it), **AI text analysis** (filled by the engine when the file is silent) or **Not stated** (never fabricated). Values the file overrides are kept with the AI crosscheck as "Modified = Y".
-12. **Duplicate indication** — rows whose report text is stored more than once get a *Possible duplicate* badge in the Reports table (with a dedicated queue filter), and the report page flags semantic near-copies (closest match ≥ 88% similar) with a direct link to compare — so the same incident re-reported or a file imported twice is never analyzed twice silently.
-13. **Duplicate-safe imports** — when a dataset is imported, rows whose text already exists in the database (or is repeated inside the same file) are skipped automatically and reported as *duplicates skipped* on the import result — identical rows are never stored twice.
-14. **Similar solved case → reference (site A → site B)** — every similar report now carries its site and HSE review state. When the current report matches a case another site already verified (ideally with action notes), the report page highlights it as the reference and asks HSE to check whether the same corrective action applies.
-15. **Recurring pattern intelligence** — pattern cards are backed by the real member reports: click a pattern to open them in the registry (each report opens with its own similar history), and a *How patterns are found* popup documents the mapping criteria (rule+activity, rule+barrier, hazard+activity on ≥ 2 SIF-potential reports). Barrier cards link straight to the real report set instead of inline examples.
-16. **Field-derived estimation** — when a dataset omits the Life-Saving Rule (and the text gives no signal), the engine estimates it from the file's structured hazard/activity values and says so in the uncertainty note — the field is never left blank when derivable.
-- **App shell** — navigation lives in a fixed **left sidebar** on desktop (Work: Dashboard · HSE Review · Reports · Analyze · Import Data — Insights: Life-Saving Rules · Recurring Patterns · Site Risk · Activities · Barrier Failures · Model Evaluation), with a drawer on mobile. The SIF trend chart adds a **Bar + line** composed view, and non-English reports show a language chip (Hindi / Bengali / Assamese, native or romanised).
 
 ## Architecture
 
