@@ -188,6 +188,7 @@ def list_jobs(db: Session = Depends(get_db)):
             "processed": j.processed,
             "imported": j.imported,
             "failed_count": j.failed_count,
+            "duplicate_count": len(j.duplicates or []),
             "sif_potential": j.sif_potential,
             "created_at": j.created_at.isoformat() if j.created_at else None,
             "finished_at": j.finished_at.isoformat() if j.finished_at else None,

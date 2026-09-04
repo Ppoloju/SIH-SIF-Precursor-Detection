@@ -151,6 +151,8 @@ class IngestJob(Base):
     high_priority: Mapped[int] = mapped_column(Integer, default=0)
     mapping: Mapped[list | None] = mapped_column(JSON, nullable=True)
     failures: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Skipped identical duplicates: [{"row": n, "duplicate_of": "RPT-xxxx"}].
+    duplicates: Mapped[list | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     first_report_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

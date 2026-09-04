@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, LifeBuoy } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, LifeBuoy } from "lucide-react";
 import { api } from "@/lib/api";
 import type { BarrierStat } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
@@ -23,14 +23,12 @@ export default function BarriersPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
   }, []);
 
-  const max = Math.max(...barriers.map((b) => b.count), 1);
   const exportRows = barriers.map((b) => ({
     "Barrier Failure": b.barrier,
     Reports: b.count,
     Sites: b.sites,
     Activities: b.activities,
     "Life-Saving Rules": b.rules,
-    "Example reports": b.examples.map((e) => e.report_id),
   }));
 
   return (
@@ -60,12 +58,6 @@ export default function BarriersPage() {
                 {b.barrier}
                 <span className="badge badge-red">{b.count}</span>
               </h2>
-              <div className="h-2 w-40 overflow-hidden rounded-full bg-brand-50">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-600"
-                  style={{ width: `${(b.count / max) * 100}%` }}
-                />
-              </div>
             </div>
             <div className="mt-3 grid gap-3 text-xs sm:grid-cols-3">
               <div>
@@ -86,22 +78,20 @@ export default function BarriersPage() {
                 </div>
               </div>
             </div>
-            {b.examples.length > 0 && (
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-brand-50 pt-3">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-muted">
-                  Example reports:
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-brand-50 pt-3 text-xs">
+              <Link
+                href={`/reports?barrier=${encodeURIComponent(b.barrier)}`}
+                title={`Open the ${b.count} real reports that failed this barrier in the registry — each opens with its own similar history`}
+                className="inline-flex items-center gap-1.5 font-bold text-brand-700 hover:underline"
+              >
+                Open the {b.count} matching reports <ArrowUpRight size={13} />
+              </Link>
+              {b.count > 3 && (
+                <span className="text-ink-muted">
+                  (more than 3 — the registry shows all of them)
                 </span>
-                {b.examples.map((ex) => (
-                  <Link
-                    key={ex.id}
-                    href={`/reports/${ex.id}`}
-                    className="rounded-lg border border-brand-200 px-2.5 py-1 font-mono text-xs font-semibold text-brand-700 hover:bg-brand-50"
-                  >
-                    {ex.report_id}
-                  </Link>
-                ))}
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ))}
       </div>

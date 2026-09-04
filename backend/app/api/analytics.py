@@ -338,60 +338,95 @@ def barriers(db: Session = Depends(get_db)):
 
 @router.get("/patterns", summary="Recurring pattern detection")
 def patterns(db: Session = Depends(get_db)):
-    """Recurring combinations mined from structured fields.
-
-    Only patterns with >= 2 reports are reported — no fabricated patterns.
+    """Recurring combinations mined from structured fields of SIF-potential
+    reports. Only patterns with >= 2 reports are reported — no fabricated
+    patterns. Every pattern carries the *actual* reports that formed it (up to
+    3 preview + the total) and the filter link that opens the full set in the
+    Reports registry.
     """
     rows = db.execute(
-        select(Analysis.life_saving_rule, Analysis.activity, Analysis.hazard, Analysis.barrier_failure)
+        select(
+            Analysis.life_saving_rule,
+            Analysis.activity,
+            Analysis.hazard,
+            Analysis.barrier_failure,
+            Report.id,
+            Report.report_id,
+            Report.site,
+        )
         .join(Report, Analysis.report_id == Report.id)
         .where(Analysis.sif_potential.is_(True))
     ).all()
 
-    rule_activity: Counter = Counter()
-    rule_barrier: Counter = Counter()
-    hazard_activity: Counter = Counter()
-    for rule, activity, hazard, barrier_list in rows:
+    counts: dict[tuple, int] = Counter()
+    examples: dict[tuple, list[dict]] = defaultdict(list)
+
+    for rule, activity, hazard, barrier_list, rid, report_id, site in rows:
         if rule and activity:
-            rule_activity[(rule, activity)] += 1
+            key = ("ra", rule, activity)
+            counts[key] += 1
+            if len(examples[key]) < 3:
+                examples[key].append({"id": rid, "report_id": report_id, "site": site})
         if rule and barrier_list:
             for b in barrier_list:
-                rule_barrier[(rule, b)] += 1
+                key = ("rb", rule, b)
+                counts[key] += 1
+                if len(examples[key]) < 3:
+                    examples[key].append({"id": rid, "report_id": report_id, "site": site})
         if hazard and activity:
-            hazard_activity[(hazard, activity)] += 1
+            key = ("ha", hazard, activity)
+            counts[key] += 1
+            if len(examples[key]) < 3:
+                examples[key].append({"id": rid, "report_id": report_id, "site": site})
 
     patterns_out: list[dict] = []
-    for (rule, activity), count in rule_activity.most_common():
-        if count >= 2:
-            patterns_out.append(
-                {
-                    "type": "rule + activity",
-                    "title": f"{rule} during {activity.lower()}",
-                    "detail": f"{rule} precursors recur during {activity.lower()} activities.",
-                    "count": count,
-                }
+    for (kind, a, b), count in counts.most_common():
+        if count < 2:
+            continue
+        if kind == "ra":
+            ptype, title, detail, filters = (
+                "rule + activity",
+                f"{a} during {b.lower()}",
+                f"{a} precursors recur during {b.lower()} activities.",
+                {"rule": a, "activity": b},
             )
-    for (rule, barrier), count in rule_barrier.most_common():
-        if count >= 2:
-            patterns_out.append(
-                {
-                    "type": "rule + barrier",
-                    "title": f"{rule} with {barrier.lower()} failures",
-                    "detail": f"{rule} precursors repeatedly involve failed {barrier.lower()} controls.",
-                    "count": count,
-                }
+        elif kind == "rb":
+            ptype, title, detail, filters = (
+                "rule + barrier",
+                f"{a} with {b.lower()} failures",
+                f"{a} precursors repeatedly involve failed {b.lower()} controls.",
+                {"rule": a, "barrier": b},
             )
-    for (hazard, activity), count in hazard_activity.most_common():
-        if count >= 2:
-            patterns_out.append(
-                {
-                    "type": "hazard + activity",
-                    "title": f"{hazard} during {activity.lower()}",
-                    "detail": f"{hazard} precursors recur during {activity.lower()} activities.",
-                    "count": count,
-                }
+        else:
+            ptype, title, detail, filters = (
+                "hazard + activity",
+                f"{a} during {b.lower()}",
+                f"{a} precursors recur during {b.lower()} activities.",
+                {"hazard": a, "activity": b},
             )
+        patterns_out.append(
+            {
+                "type": ptype,
+                "title": title,
+                "detail": detail,
+                "count": count,
+                "filters": filters,
+                "examples": examples[(kind, a, b)],
+            }
+        )
+
+    patterns_out.sort(key=lambda p: p["count"], reverse=True)
     return {
         "patterns": patterns_out[:20],
-        "note": "Patterns are mined from available structured data; none are fabricated.",
+        "note": (
+            "Patterns are mined from the actual stored SIF-potential reports; "
+            "the counts are real and each pattern links to the reports that "
+            "formed it. Nothing is fabricated."
+        ),
+        "criteria": (
+            "Pattern = the same combination of structured fields on >= 2 "
+            "SIF-potential reports: Life-Saving Rule + activity, Life-Saving "
+            "Rule + barrier failure, or hazard + activity. Click a pattern to "
+            "open the real matching reports in the registry."
+        ),
     }

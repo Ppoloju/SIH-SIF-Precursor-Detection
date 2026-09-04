@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import exists, or_, select
+from sqlalchemy import String, cast, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.db import get_db
@@ -19,6 +19,12 @@ from app.services.analysis_pipeline import analyze_report
 from app.services.similarity import find_similar
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
+
+# Similarity score above which the top match is flagged as a possible
+# duplicate (near-identical wording => same event reported twice / a file
+# imported twice). Genuinely similar-but-distinct precursors score lower
+# because the engine caps shared-concept bonuses well below this.
+DUP_SIMILARITY = 0.88
 
 
 def _next_report_id(db: Session) -> str:
@@ -74,12 +80,43 @@ def _load_detail(db: Session, report_id: int, similar: bool = True) -> ReportDet
     similar_reports = (
         find_similar(report, db=db, limit=5) if similar and report.analysis else []
     )
+    # Enrich every match with its site + latest HSE review state so the UI can
+    # tell "a similar case that was solved at another site" apart from one
+    # that is still open — the basis of the site-A → site-B learning view.
+    if similar_reports:
+        ids = [s["id"] for s in similar_reports]
+        matched = db.execute(
+            select(Report)
+            .options(selectinload(Report.reviews))
+            .where(Report.id.in_(ids))
+        ).scalars().all()
+        meta: dict[int, dict] = {}
+        for rep in matched:
+            last = rep.reviews[-1] if rep.reviews else None
+            meta[rep.id] = {
+                "site": rep.site,
+                "decision": last.decision if last else None,
+                "reviewer": last.reviewer if last else None,
+                "comments": last.comments if last else None,
+                "corrected_rule": last.corrected_rule if last else None,
+                "corrected_priority": last.corrected_priority if last else None,
+                "reviewed_at": (
+                    last.reviewed_at.isoformat() if last and last.reviewed_at else None
+                ),
+            }
+        similar_reports = [{**s, **meta.get(s["id"], {})} for s in similar_reports]
+
+    # Possible duplicate = the closest match is a near-copy of this report.
+    duplicate_of = None
+    if similar_reports and similar_reports[0]["similarity"] >= DUP_SIMILARITY:
+        duplicate_of = similar_reports[0]
     return ReportDetailOut(
         **ReportOut.model_validate(report).model_dump(),
         analysis=report.analysis,
         review=review,
         review_status=review.decision if review else "pending",
         similar_reports=similar_reports,
+        duplicate_of=duplicate_of,
     )
 
 
@@ -154,6 +191,8 @@ def list_reports(
     sif: bool | None = Query(default=None),
     q: str | None = Query(default=None, description="Free-text search"),
     source: str | None = Query(default=None, description="Source file or dataset"),
+    hazard: str | None = Query(default=None, description="Hazard (exact match)"),
+    barrier: str | None = Query(default=None, description="Barrier failure contains"),
     limit: int = Query(default=500, le=10000),
     db: Session = Depends(get_db),
 ):
@@ -175,7 +214,13 @@ def list_reports(
         stmt = stmt.where(Report.source == source)
     
     # Join with Analysis only when needed for filters
-    needs_analysis_join = sif is not None or priority is not None or rule is not None
+    needs_analysis_join = (
+        sif is not None
+        or priority is not None
+        or rule is not None
+        or hazard is not None
+        or barrier is not None
+    )
     if needs_analysis_join:
         stmt = stmt.join(Analysis, Analysis.report_id == Report.id)
         if sif is not None:
@@ -184,6 +229,14 @@ def list_reports(
             stmt = stmt.where(Analysis.priority == priority.upper())
         if rule:
             stmt = stmt.where(Analysis.life_saving_rule == rule)
+        if hazard:
+            stmt = stmt.where(Analysis.hazard == hazard)
+        if barrier:
+            # JSON arrays are not portably comparable; a cast-to-text contains
+            # is good enough for a contains filter on this data volume.
+            stmt = stmt.where(
+                Analysis.barrier_failure.cast(String).ilike(f"%{barrier}%")
+            )
 
     # Optimize status filtering with subquery instead of any()
     if status:
@@ -211,6 +264,50 @@ def list_reports(
             )
         )
     return out
+
+
+@router.get("/counts", summary="Quick report counts (nav badges / review queue)")
+def report_counts(db: Session = Depends(get_db)):
+    """Lightweight aggregate counts used for the HSE Review badge and the
+    reviewer workspace: how many reports still need an HSE decision, how many
+    were verified/rejected, and how many failed analysis."""
+    total = db.scalar(select(func.count()).select_from(Report)) or 0
+    analyzed = Report.processing_status == "analyzed"
+    unreviewed = ~exists().where(Review.report_id == Report.id)
+    pending = (
+        db.scalar(select(func.count()).select_from(Report).where(analyzed, unreviewed)) or 0
+    )
+    verified = (
+        db.scalar(
+            select(func.count(func.distinct(Report.id)))
+            .select_from(Report)
+            .join(Review, Review.report_id == Report.id)
+            .where(Review.decision.in_(["confirmed", "reviewed", "edited"]))
+        )
+        or 0
+    )
+    rejected = (
+        db.scalar(
+            select(func.count(func.distinct(Report.id)))
+            .select_from(Report)
+            .join(Review, Review.report_id == Report.id)
+            .where(Review.decision == "rejected")
+        )
+        or 0
+    )
+    failed = (
+        db.scalar(
+            select(func.count()).select_from(Report).where(Report.processing_status == "failed")
+        )
+        or 0
+    )
+    return {
+        "total": total,
+        "pending": pending,
+        "verified": verified,
+        "rejected": rejected,
+        "failed": failed,
+    }
 
 
 @router.get("/{report_id}", response_model=ReportDetailOut, summary="Get one report with full analysis")

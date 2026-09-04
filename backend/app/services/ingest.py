@@ -288,6 +288,42 @@ def resolve_mapping(
 # Parsing
 # ---------------------------------------------------------------------------
 
+def _text_fingerprint(text: str) -> str:
+    """Normalized fingerprint used for duplicate detection: lowercase,
+    punctuation/whitespace collapsed, Indic script preserved."""
+    return re.sub(r"[^a-z0-9\u0900-\u09ff]+", " ", text.lower()).strip()
+
+
+# Field-value hints used to *estimate* the Life-Saving Rule when neither the
+# report text nor a file-provided rule column produced one (e.g. a dataset that
+# only carries hazard / activity columns). Ordered by specificity.
+_RULE_FIELD_HINTS: list[tuple[str, list[str]]] = [
+    ("Energy Isolation", ["isolat", "loto", "lockout", "tagout", "energ", "residual pressure", "de-energ"]),
+    ("Confined Space Entry", ["confined", "vessel", "manhole", "gas test", "attendant"]),
+    ("Hot Work Safety", ["hot work", "welding", "cutting", "grinding", "spark", "ignition"]),
+    ("Working at Height", ["height", "fall", "ladder", "scaffold", "roof", "platform"]),
+    ("Safe Mechanical Lifting", ["lifting", "crane", "rigging", "sling", "hoist", "suspended"]),
+    ("Line of Fire", ["line of fire", "stored energy", "kickback", "swing", "pressurized"]),
+    ("Toxic Gas Safety", ["toxic", "gas leak", "h2s", "hydrogen sulfide", "asphyx", "ventilation", "oxygen"]),
+    ("Driving Safety", ["driving", "vehicle", "driver", "transport", "road", "traffic"]),
+    ("Work Authorization", ["permit", "ptw", "authorization"]),
+    ("Bypassing Safety Controls", ["bypass", "defeat", "override", "disable", "interlock"]),
+]
+
+
+def estimate_rule_from_fields(hazard: str = "", activity: str = "") -> str | None:
+    """Estimate the canonical Life-Saving Rule from structured hazard/activity
+    values when the free text gave no signal (and the file had no rule column).
+    Returns ``None`` when nothing matches — never guesses."""
+    haystack = f"{hazard} {activity}".lower()
+    if not haystack.strip():
+        return None
+    for rule, needles in _RULE_FIELD_HINTS:
+        if any(n in haystack for n in needles):
+            return rule
+    return None
+
+
 def _cell(value: Any) -> str:
     if value is None:
         return ""
@@ -559,6 +595,23 @@ def _import_one_row(
     # is recorded so the UI can show "modified = Y" with the AI crosscheck.
     modified_fields = _apply_file_overrides(result, norm)
 
+    # If neither the free text nor a file-provided rule column produced a
+    # Life-Saving Rule, estimate it from the file's structured hazard/activity
+    # values (HSSE exports often omit the rule) and say so honestly — never
+    # leave the field blank when it is derivable from available fields.
+    if not result.get("life_saving_rule"):
+        estimated = estimate_rule_from_fields(
+            norm.get("hazard") or "", norm.get("activity") or ""
+        )
+        if estimated:
+            result["life_saving_rule"] = estimated
+            base_note = (result.get("uncertainty_note") or "").strip()
+            extra = (
+                f"Life-Saving Rule '{estimated}' was estimated from the file's "
+                "structured fields because no matching text signal was found."
+            )
+            result["uncertainty_note"] = f"{base_note} {extra}".strip() if base_note else extra
+
     db.add(
         Analysis(
             report_id=report.id,
@@ -623,6 +676,18 @@ def ingest_rows(
     first_report_id: str | None = None
     processed = 0
 
+    # Duplicate guard: identical report text (fingerprint) already stored in
+    # the database, or imported earlier in this same file, is skipped — the
+    # same incident / the same export is never stored twice.
+    duplicates: list[dict[str, Any]] = []
+    file_fps: dict[str, str] = {}
+    existing_fps: dict[str, str] = {}
+    for stored_rid, stored_text in db.execute(
+        select(Report.report_id, Report.report_text)
+    ).all():
+        if stored_text:
+            existing_fps.setdefault(_text_fingerprint(stored_text), stored_rid)
+
     def _sync_job() -> None:
         if job_id is None:
             return
@@ -638,11 +703,27 @@ def ingest_rows(
                 high_priority=high_count,
                 failures=failures[-20:] or None,
                 first_report_id=first_report_id,
+                duplicates=duplicates[-20:] or None,
             )
         )
         db.commit()
 
     for i, raw_row in enumerate(rows, start=1):
+        # Skip exact duplicates (already in the database or in this file).
+        dup_of: str | None = None
+        fp: str | None = None
+        try:
+            pre_text = (normalize_row(raw_row, mapping, headers)["report_text"] or "").strip()
+            if pre_text:
+                fp = _text_fingerprint(pre_text)
+                dup_of = file_fps.get(fp) or existing_fps.get(fp)
+        except Exception:  # noqa: BLE001 — the row-level import below re-checks
+            fp = None
+        if dup_of:
+            processed += 1
+            duplicates.append({"row": i, "duplicate_of": dup_of})
+            continue
+
         try:
             outcome = _import_one_row(db, raw_row, mapping, source, headers, use_llm)
         except Exception as exc:  # noqa: BLE001 — never fail the whole import
@@ -661,6 +742,8 @@ def ingest_rows(
 
         imported += 1
         first_report_id = first_report_id or outcome["report"].report_id
+        if fp:
+            file_fps.setdefault(fp, outcome["report"].report_id)
         if outcome.get("sif"):
             sif_count += 1
         if outcome.get("high"):
@@ -682,6 +765,8 @@ def ingest_rows(
         "rows_total": len(rows),
         "imported": imported,
         "skipped_empty": skipped_empty,
+        "duplicate_count": len(duplicates),
+        "duplicates": duplicates[-20:],
         "failed": failures,
         "sif_potential": sif_count,
         "high_priority": high_count,
@@ -690,6 +775,8 @@ def ingest_rows(
         "mapping": mapping,
         "note": (
             "Each row was mapped onto report fields and run through the SIF pipeline. "
+            "Identical duplicate rows (same text already stored or repeated in "
+            "this file) are skipped and counted separately — never imported twice. "
             "Reports are stored with source provenance (not demo data)."
         ),
     }
@@ -788,6 +875,8 @@ def job_summary(db: Session, job_id: int) -> dict[str, Any] | None:
         "first_report_id": job.first_report_id,
         "mapping": job.mapping,
         "failures": (job.failures or [])[-10:],
+        "duplicate_count": len(job.duplicates or []),
+        "duplicates": (job.duplicates or [])[-10:],
         "error": job.error,
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "finished_at": job.finished_at.isoformat() if job.finished_at else None,

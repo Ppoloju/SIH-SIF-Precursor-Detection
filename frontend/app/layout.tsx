@@ -46,8 +46,13 @@ export default function RootLayout({
         <ThemeProvider>
           <div className="ambient" aria-hidden="true" />
           <Nav />
-          <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">{children}</main>
-          <Footer />
+          {/* Content offset so the fixed left rail never overlaps pages. */}
+          <div className="lg:pl-64">
+            <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+              {children}
+            </main>
+            <Footer />
+          </div>
         </ThemeProvider>
       </body>
     </html>

@@ -110,6 +110,8 @@ export interface ReportDetail extends Report {
   review: Review | null;
   review_status: ReviewStatus;
   similar_reports: SimilarReport[];
+  /** Set when the closest stored match is a near-copy (possible duplicate). */
+  duplicate_of?: SimilarReport | null;
 }
 
 export interface SimilarReport {
@@ -120,6 +122,15 @@ export interface SimilarReport {
   common_activity: string | null;
   common_barrier: string[] | null;
   common_rule: string | null;
+  // Review context of the matched report (set by the API) — used to surface
+  // a *solved* similar case at another site as the reference for this one.
+  site?: string | null;
+  decision?: ReviewStatus | null;
+  reviewer?: string | null;
+  comments?: string | null;
+  corrected_rule?: string | null;
+  corrected_priority?: Priority;
+  reviewed_at?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +271,21 @@ export interface Pattern {
   title: string;
   detail: string;
   count: number;
+  /** Registry filters that open the real reports forming this pattern. */
+  filters?: {
+    rule?: string;
+    activity?: string;
+    hazard?: string;
+    barrier?: string;
+  };
+  /** Up to 3 real member reports (id + platform ID + site). */
+  examples?: { id: number; report_id: string; site: string | null }[];
+}
+
+export interface PatternResponse {
+  patterns: Pattern[];
+  note?: string;
+  criteria?: string;
 }
 
 /** Ingest column mapping: canonical field -> column name | null (explicit none). */
@@ -323,6 +349,8 @@ export interface IngestJobState extends IngestJobStart {
   high_priority: number;
   first_report_id: string | null;
   failures: IngestFailure[];
+  duplicate_count?: number;
+  duplicates?: { row: number; duplicate_of: string }[];
   error: string | null;
   created_at?: string | null;
   finished_at?: string | null;
@@ -424,6 +452,16 @@ export const api = {
     ),
 
   getOverview: () => request<AnalyticsOverview>("/api/analytics/overview"),
+
+  /** Lightweight aggregate counts (HSE Review badge / reviewer workspace). */
+  getReportCounts: () =>
+    request<{
+      total: number;
+      pending: number;
+      verified: number;
+      rejected: number;
+      failed: number;
+    }>("/api/reports/counts"),
   getLifeSavingRules: () =>
     request<{ rules: RuleStat[]; sif_total: number; note?: string }>(
       "/api/analytics/life-saving-rules"
@@ -438,8 +476,7 @@ export const api = {
     request<{ barriers: BarrierStat[]; note?: string }>(
       "/api/analytics/barriers"
     ),
-  getPatterns: () =>
-    request<{ patterns: Pattern[]; note?: string }>("/api/analytics/patterns"),
+  getPatterns: () => request<PatternResponse>("/api/analytics/patterns"),
 
   // Evaluation harness (golden labeled set — deterministic, no LLM).
   getEvaluation: (fresh = false) =>

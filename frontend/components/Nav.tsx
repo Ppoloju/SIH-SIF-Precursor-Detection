@@ -3,35 +3,67 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Database, Menu, Moon, ShieldAlert, Sun, X } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  ClipboardCheck,
+  FileText,
+  FlaskConical,
+  HardHat,
+  LayoutDashboard,
+  MapPin,
+  Menu,
+  Moon,
+  ShieldAlert,
+  ShieldCheck,
+  Sun,
+  Upload,
+  Wand2,
+  X,
+} from "lucide-react";
 import { api } from "@/lib/api";
 
-const links = [
-  { href: "/", label: "Dashboard" },
-  { href: "/analyze", label: "Analyze" },
-  { href: "/ingest", label: "Import Data" },
-  { href: "/reports", label: "Reports" },
-  { href: "/rules", label: "Rules" },
-  { href: "/sites", label: "Sites" },
-  { href: "/activities", label: "Activities" },
-  { href: "/barriers", label: "Barriers" },
-  { href: "/patterns", label: "Patterns" },
+/**
+ * Navigation lives in a fixed LEFT SIDEBAR (desktop) so the user always knows
+ * where they are; a compact top bar + slide-in drawer covers mobile.
+ *
+ * Layout contract: pages render inside `lg:pl-64` (see app/layout.tsx) so the
+ * rail never overlaps content. Section labels are static text; every clickable
+ * item carries an icon + filled active pill so links and headings never look
+ * the same.
+ */
+const workLinks = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/review", label: "HSE Review", icon: ClipboardCheck, badge: true },
+  { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/analyze", label: "Analyze", icon: Wand2 },
+  { href: "/ingest", label: "Import Data", icon: Upload },
 ];
+
+const insightLinks = [
+  { href: "/rules", label: "Life-Saving Rules", icon: ShieldCheck },
+  { href: "/patterns", label: "Recurring Patterns", icon: Activity },
+  { href: "/sites", label: "Site Risk", icon: MapPin },
+  { href: "/activities", label: "Activities", icon: HardHat },
+  { href: "/barriers", label: "Barrier Failures", icon: BarChart3 },
+  { href: "/evaluation", label: "Model Evaluation", icon: FlaskConical },
+];
+
+type Counts = { ok: boolean; total?: number; pending?: number };
 
 export default function Nav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [dark, setDark] = useState(false);
-  const [live, setLive] = useState<{ ok: boolean; total?: number }>({ ok: false });
+  const [counts, setCounts] = useState<Counts>({ ok: false });
 
-  // Close the mobile drawer whenever the route changes.
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
 
-  // Keep the toggle in sync with the boot script / external changes.
   useEffect(() => {
-    const sync = () => setDark(document.documentElement.classList.contains("dark"));
+    const sync = () =>
+      setDark(document.documentElement.classList.contains("dark"));
     sync();
     window.addEventListener("sif-theme", sync);
     return () => window.removeEventListener("sif-theme", sync);
@@ -48,124 +80,249 @@ export default function Nav() {
     window.dispatchEvent(new Event("sif-theme"));
   };
 
-  // Show a live "backend connected · N reports" pill when the API is reachable.
+  // Live badge state: backend up + report totals + pending HSE reviews.
   useEffect(() => {
     let cancelled = false;
-    api
-      .getOverview()
-      .then((o) => {
-        if (!cancelled) setLive({ ok: true, total: o.total_reports });
-      })
-      .catch(() => {
-        if (!cancelled) setLive({ ok: false });
-      });
+    async function refresh() {
+      try {
+        const [ov, cnt] = await Promise.all([
+          api.getOverview(),
+          api.getReportCounts(),
+        ]);
+        if (!cancelled)
+          setCounts({ ok: true, total: ov.total_reports, pending: cnt.pending });
+      } catch {
+        if (!cancelled) setCounts({ ok: false });
+      }
+    }
+    refresh();
+    const timer = window.setInterval(refresh, 30_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [pathname]);
+  }, []);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-  return (
-    <header className="sticky top-0 z-40 border-b border-brand-100 bg-white/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
-        <Link href="/" className="flex min-w-0 items-center gap-2.5">
-          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-md">
-            <ShieldAlert size={18} />
-          </span>
-          <span className="hidden truncate text-sm font-bold tracking-tight text-ink min-[380px]:block">
-            SIF Precursor Detection
-          </span>
-        </Link>
+  const sections = (
+    <>
+      <div className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
+        <NavGroup label="Work">
+          {workLinks.map((l) => (
+            <NavItem
+              key={l.href}
+              href={l.href}
+              label={l.label}
+              icon={l.icon}
+              active={isActive(l.href)}
+              badge={l.badge ? counts.pending ?? 0 : 0}
+            />
+          ))}
+        </NavGroup>
+        <NavGroup label="Insights · Analytics & learning">
+          {insightLinks.map((l) => (
+            <NavItem
+              key={l.href}
+              href={l.href}
+              label={l.label}
+              icon={l.icon}
+              active={isActive(l.href)}
+            />
+          ))}
+        </NavGroup>
+      </div>
 
-        <nav className="hidden items-center gap-0.5 lg:flex">
-          {links.map((l) => {
-            const active = isActive(l.href);
-            return (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`relative rounded-lg px-3 py-2 text-[13px] font-medium transition ${
-                  active
-                    ? "bg-brand-100 text-brand-700"
-                    : "text-ink-soft hover:bg-brand-50 hover:text-brand-700"
-                }`}
-              >
-                {l.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="flex items-center gap-2">
+      <div className="border-t border-brand-100 p-3">
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50/40 px-3 py-2.5">
+          <div className="min-w-0">
+            {counts.ok ? (
+              <>
+                <p className="flex items-center gap-1.5 text-[11px] font-bold text-green-700">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                  </span>
+                  Backend live
+                </p>
+                <p className="mt-0.5 truncate text-[10px] text-ink-muted">
+                  {counts.total} reports · {counts.pending} awaiting review
+                </p>
+              </>
+            ) : (
+              <p className="text-[11px] font-semibold text-ink-muted">
+                Backend offline — start the API
+              </p>
+            )}
+          </div>
           <button
             onClick={toggleTheme}
             aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
             title={dark ? "Switch to light mode" : "Switch to dark mode"}
-            className="grid h-9 w-9 place-items-center rounded-lg border border-brand-200 text-ink-soft transition hover:bg-brand-50 hover:text-brand-700"
+            className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-brand-200 bg-white text-ink-soft transition hover:bg-brand-50 hover:text-brand-700"
           >
-            {dark ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-
-          {live.ok && (
-            <span
-              className="hidden items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-700 sm:inline-flex"
-              title="Backend connected — analytics computed from the database"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-              </span>
-              Live · {live.total} reports
-            </span>
-          )}
-
-          <button
-            onClick={() => setOpen((v) => !v)}
-            aria-label={open ? "Close navigation" : "Open navigation"}
-            className="grid h-9 w-9 place-items-center rounded-lg border border-brand-200 text-ink-soft transition hover:bg-brand-50 hover:text-brand-700 lg:hidden"
-          >
-            {open ? <X size={17} /> : <Menu size={17} />}
+            {dark ? <Sun size={15} /> : <Moon size={15} />}
           </button>
         </div>
+        <p className="mt-2.5 text-center text-[10px] leading-relaxed text-ink-muted">
+          Prototype · AI-assisted · Requires HSE/OIL validation
+        </p>
       </div>
+    </>
+  );
 
-      {/* Mobile drawer */}
+  return (
+    <>
+      {/* ---- Desktop: fixed left rail ---- */}
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-brand-100 bg-white lg:flex">
+        <BrandLink />
+        {sections}
+      </aside>
+
+      {/* ---- Mobile: compact top bar ---- */}
+      <header className="sticky top-0 z-40 border-b border-brand-100 bg-white/90 backdrop-blur lg:hidden">
+        <div className="flex h-14 items-center justify-between gap-3 px-4">
+          <BrandLink compact />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-brand-200 text-ink-soft"
+            >
+              {dark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <button
+              onClick={() => setOpen((v) => !v)}
+              aria-label={open ? "Close navigation" : "Open navigation"}
+              aria-expanded={open}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-brand-200 text-ink-soft"
+            >
+              {open ? <X size={17} /> : <Menu size={17} />}
+            </button>
+          </div>
+        </div>
+        {counts.ok && (
+          <p className="border-t border-brand-50 px-4 py-1.5 text-[10px] font-semibold text-green-700">
+            ● Backend live — {counts.total} reports · {counts.pending} awaiting
+            HSE review
+          </p>
+        )}
+      </header>
+
+      {/* ---- Mobile drawer ---- */}
       {open && (
-        <div className="border-t border-brand-100 bg-white/95 px-4 pb-5 pt-2 backdrop-blur lg:hidden">
-          <nav className="grid grid-cols-2 gap-1.5">
-            {links.map((l) => {
-              const active = isActive(l.href);
-              return (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                    active
-                      ? "bg-brand-100 text-brand-700"
-                      : "text-ink-soft hover:bg-brand-50"
-                  }`}
-                >
-                  {l.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <Link
-            href="/ingest"
-            className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-dashed border-brand-300 bg-brand-50/60 px-3 py-2.5 text-sm font-semibold text-brand-700"
-          >
-            <Database size={15} />
-            Import your HSSE dataset
-          </Link>
-          {live.ok && (
-            <p className="mt-3 text-center text-[11px] font-semibold text-green-700">
-              ● Backend connected — {live.total} reports in the database
-            </p>
-          )}
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute inset-y-0 left-0 flex w-[19rem] max-w-[85vw] flex-col bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-brand-100 px-4 py-3">
+              <BrandLink compact />
+              <button
+                onClick={() => setOpen(false)}
+                aria-label="Close navigation"
+                className="grid h-8 w-8 place-items-center rounded-lg border border-brand-200 text-ink-soft"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            {sections}
+          </div>
         </div>
       )}
-    </header>
+    </>
+  );
+}
+
+function BrandLink({ compact = false }: { compact?: boolean }) {
+  return (
+    <Link
+      href="/"
+      className="flex items-center gap-3 border-b border-brand-100 px-4 py-4"
+      title="Back to dashboard"
+    >
+      <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-700 text-white shadow-sm">
+        <ShieldAlert size={18} />
+      </span>
+      <span className="flex min-w-0 flex-col leading-tight">
+        <span className="truncate text-sm font-extrabold tracking-tight text-ink">
+          SIF Precursor Detection
+        </span>
+        {!compact && (
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+            HSE early-warning platform
+          </span>
+        )}
+      </span>
+    </Link>
+  );
+}
+
+function NavGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">
+        {label}
+      </p>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
+
+function NavItem({
+  href,
+  label,
+  icon: Icon,
+  active,
+  badge = 0,
+}: {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  active: boolean;
+  badge?: number;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      title={label}
+      className={`relative flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition ${
+        active
+          ? "bg-brand-100 text-brand-700"
+          : "text-ink-soft hover:bg-brand-50 hover:text-brand-700"
+      }`}
+    >
+      <Icon
+        size={16}
+        strokeWidth={2.2}
+        className={active ? "text-brand-600" : "text-ink-muted"}
+      />
+      <span className="flex-1 truncate">{label}</span>
+      {badge > 0 && (
+        <span
+          className="grid h-5 min-w-[20px] place-items-center rounded-full bg-amber-400 px-1 text-[10px] font-extrabold text-amber-950"
+          title={`${badge} report(s) still need an HSE decision`}
+        >
+          {badge}
+        </span>
+      )}
+      {active && <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand-600" />}
+    </Link>
   );
 }

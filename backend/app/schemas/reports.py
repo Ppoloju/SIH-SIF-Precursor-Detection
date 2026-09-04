@@ -91,6 +91,15 @@ class SimilarReportOut(BaseModel):
     common_activity: Optional[str] = None
     common_barrier: Optional[list[str]] = None
     common_rule: Optional[str] = None
+    # Review context of the matched report — lets the UI surface a *solved*
+    # similar case (site A) as the reference for the current one (site B).
+    site: Optional[str] = None
+    decision: Optional[str] = None
+    reviewer: Optional[str] = None
+    comments: Optional[str] = None
+    corrected_rule: Optional[str] = None
+    corrected_priority: Optional[str] = None
+    reviewed_at: Optional[str] = None
 
 
 class ReportOut(BaseModel):
@@ -115,6 +124,10 @@ class ReportDetailOut(ReportOut):
     review: Optional[ReviewOut] = None
     review_status: str = "pending"
     similar_reports: list[SimilarReportOut] = []
+    # Set when another stored report is a near-copy of this one (same incident
+    # reported twice / the same row imported twice). Computed from the
+    # similarity engine — never from the file's own IDs.
+    duplicate_of: Optional[SimilarReportOut] = None
 
 
 class AnalysisResultOut(BaseModel):

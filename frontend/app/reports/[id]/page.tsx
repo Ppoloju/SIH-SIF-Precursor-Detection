@@ -8,8 +8,10 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
+  Copy,
   FileText,
   GitCompare,
+  ListChecks,
   Loader2,
   MessageSquare,
   PenLine,
@@ -20,7 +22,11 @@ import {
 import type { ReportDetail } from "@/lib/api";
 import { api } from "@/lib/api";
 import AnalysisResultCard from "@/components/AnalysisResultCard";
-import { PriorityBadge, ReviewBadge } from "@/components/Badges";
+import {
+  isVerified,
+  PriorityBadge,
+  ReviewBadge,
+} from "@/components/Badges";
 
 export default function ReportDetailPage() {
   const params = useParams<{ id: string }>();
@@ -109,6 +115,13 @@ export default function ReportDetailPage() {
   }
 
   const a = report.analysis;
+  // Site-A → Site-B learning: matches an HSE professional has already
+  // verified (preferably with recorded action notes) are the reference
+  // candidates for this report.
+  const verifiedSimilar = (report.similar_reports ?? []).filter(
+    (s) => s.decision && isVerified(s.decision)
+  );
+  const solvedWithNotes = verifiedSimilar.filter((s) => s.comments);
   const result = a
     ? {
         sif_potential: a.sif_potential,
@@ -188,6 +201,18 @@ export default function ReportDetailPage() {
                 <MetaChip label="Date" value={report.date ?? "not set"} />
                 <MetaChip label="Site" value={report.site ?? "not set"} />
                 {a?.activity && <MetaChip label="Activity" value={a.activity} />}
+                {a?.languages && a.languages.some((l) => l !== "en") && (
+                  <MetaChip
+                    label="Language"
+                    value={a.languages
+                      .map((l) => langLabel(l))
+                      .filter((x, i, arr) => arr.indexOf(x) === i)
+                      .join(" + ")}
+                    title="Languages detected in the report text (the multilingual
+                    engine maps the same safety phrases in Hindi / Bengali /
+                    Assamese — native or romanised — to the same Life-Saving Rules)"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -202,6 +227,28 @@ export default function ReportDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Possible duplicate: the closest stored match is a near-copy of this
+          report (same wording => same event reported twice / file re-import). */}
+      {report.duplicate_of && (
+        <div className="mt-4 flex flex-wrap items-center gap-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-sm text-amber-900">
+          <Copy size={16} className="flex-shrink-0" />
+          <span className="min-w-0 flex-1">
+            <b>Possible duplicate of {report.duplicate_of.report_id}</b>
+            {" "}— the closest stored match is{" "}
+            {Math.round(report.duplicate_of.similarity * 100)}% similar. This
+            looks like the same incident was reported twice (or the same row
+            was imported again) — review before assigning a second corrective
+            action.
+          </span>
+          <Link
+            href={`/reports/${report.duplicate_of.id}`}
+            className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-800 transition hover:bg-amber-100"
+          >
+            Compare with {report.duplicate_of.report_id} →
+          </Link>
+        </div>
+      )}
 
       {/* Rows the pipeline could not analyze must not look like ordinary
           pending reports — say so clearly and offer the re-run. */}
@@ -257,41 +304,94 @@ export default function ReportDetailPage() {
 
           {result && <AnalysisResultCard result={result} heading={`AI Analysis — ${report.report_id}`} />}
 
+          {a && <FieldCoverageCard report={report} />}
+
           {report.similar_reports.length > 0 && (
             <div className="card">
               <h2 className="card-title">
-                <GitCompare size={16} className="text-brand-600" /> Similar Historical
-                Reports
+                <GitCompare size={16} className="text-brand-600" /> Similar
+                Historical Reports
               </h2>
-          <p className="mt-1 text-xs text-ink-muted">
-            Reports sharing the same hazard, activity or barrier signals — a
-            fast way to see whether this precursor has appeared before. Click
-            a row to open the related report.
-          </p>
-              <ul className="mt-3 space-y-2">
-                {report.similar_reports.map((sr) => (
-                  <li key={sr.report_id}>
-                    <Link
-                      href={`/reports/${sr.id}`}
-                      className="group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-brand-100 bg-brand-50/40 px-3.5 py-2.5 transition hover:border-brand-300 hover:bg-brand-100/60"
-                    >
-                      <span className="font-mono text-xs font-bold text-brand-700">
+              <p className="mt-1 text-xs text-ink-muted">
+                Reports sharing the same hazard, activity or barrier signals —
+                a fast way to see whether this precursor has appeared before.
+                Matches already verified by HSE are marked, and a verified
+                match with action notes becomes the reference for this report.
+              </p>
+
+              {/* Site-A → Site-B learning callout */}
+              {solvedWithNotes.length > 0 && (
+                <div className="mt-3 rounded-xl border border-green-200 bg-green-50 p-3.5 text-xs leading-relaxed text-green-800">
+                  <p className="font-bold uppercase tracking-wider text-green-700">
+                    Reference: similar case already handled by HSE
+                  </p>
+                  {solvedWithNotes.slice(0, 2).map((sr) => (
+                    <p key={sr.report_id} className="mt-1.5">
+                      <Link
+                        href={`/reports/${sr.id}`}
+                        className="font-mono font-bold text-green-800 underline decoration-green-300 hover:decoration-green-600"
+                      >
                         {sr.report_id}
-                      </span>
-                      <span className="ml-auto badge badge-pink">
-                        {Math.round(sr.similarity * 100)}% similar
-                      </span>
-                      <span className="w-full text-[11px] text-ink-muted">
-                        {[sr.common_hazard, sr.common_activity, sr.common_rule]
-                          .filter(Boolean)
-                          .join(" · ") || "Shared precursor context"}
-                      </span>
-                      <span className="text-[11px] font-bold text-brand-600 opacity-0 transition group-hover:opacity-100">
-                        Open →
-                      </span>
-                    </Link>
-                  </li>
-                ))}
+                      </Link>{" "}
+                      {sr.site ? `at ${sr.site} · ` : ""}
+                      {Math.round(sr.similarity * 100)}% similar — HSE action
+                      notes: “{sr.comments}”. Check whether the same corrective
+                      action applies to this report before acting.
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              <ul className="mt-3 space-y-2">
+                {report.similar_reports.map((sr) => {
+                  const decision = sr.decision;
+                  return (
+                    <li key={sr.report_id}>
+                      <Link
+                        href={`/reports/${sr.id}`}
+                        className="group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-brand-100 bg-brand-50/40 px-3.5 py-2.5 transition hover:border-brand-300 hover:bg-brand-100/60"
+                      >
+                        <span className="font-mono text-xs font-bold text-brand-700">
+                          {sr.report_id}
+                        </span>
+                        {sr.site && (
+                          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-muted">
+                            {sr.site}
+                          </span>
+                        )}
+                        {decision && isVerified(decision) ? (
+                          <span className="badge badge-green">
+                            <CheckCircle2 size={11} /> HSE verified
+                          </span>
+                        ) : decision === "rejected" ? (
+                          <span className="badge badge-orange">Rejected</span>
+                        ) : (
+                          <span className="badge badge-gray">Not reviewed</span>
+                        )}
+                        <span className="ml-auto badge badge-pink">
+                          {Math.round(sr.similarity * 100)}% similar
+                        </span>
+                        <span className="w-full text-[11px] text-ink-muted">
+                          {[
+                            sr.common_hazard,
+                            sr.common_activity,
+                            sr.common_rule,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "Shared precursor context"}
+                          {sr.comments && (
+                            <span className="mt-0.5 block truncate text-ink-soft" title={sr.comments}>
+                              HSE notes: “{sr.comments}”
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-[11px] font-bold text-brand-600 opacity-0 transition group-hover:opacity-100">
+                          Open →
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -452,6 +552,19 @@ export default function ReportDetailPage() {
   );
 }
 
+function langLabel(code: string): string {
+  const map: Record<string, string> = {
+    en: "English",
+    hi: "Hindi",
+    "hi-latn": "Hindi (roman)",
+    bn: "Bengali",
+    "bn-latn": "Bengali (roman)",
+    as: "Assamese",
+    "as-latn": "Assamese (roman)",
+  };
+  return map[code] ?? code;
+}
+
 function MetaChip({
   label,
   value,
@@ -471,5 +584,149 @@ function MetaChip({
       </b>
       {value}
     </span>
+  );
+}
+
+/**
+ * “How each field was populated” — makes the missing-field handling visible
+ * for one report: values that came from the imported file (authoritative),
+ * values the AI inferred from the free text, and fields the report simply
+ * does not state (never fabricated). Mirrors the earlier user requirement:
+ * if intermediate fields are missing from the file, the model analyses the
+ * text and fills the remaining fields; if the file provides them, the file
+ * wins and the AI value is kept as a crosscheck.
+ */
+function FieldCoverageCard({ report }: { report: ReportDetail }) {
+  const a = report.analysis;
+  const fileOverrides = new Map(
+    (a?.modified_fields ?? []).map((m) => [m.field, m.used])
+  );
+
+  type Src = "file" | "ai" | "none";
+  const rows: { label: string; value: string | null; src: Src; title?: string }[] =
+    [];
+  const push = (
+    label: string,
+    fileVal: string | null | undefined,
+    aiVal: string | null | undefined
+  ) => {
+    const value = fileVal || aiVal || null;
+    rows.push({
+      label,
+      value,
+      src: fileVal ? "file" : aiVal ? "ai" : "none",
+      title: value ?? undefined,
+    });
+  };
+
+  push("Report type", report.report_type, null);
+  push("Actual ID (file)", report.source_id, null);
+  push("Date", report.date, null);
+  push("Site", report.site, null);
+  push(
+    "Activity",
+    fileOverrides.get("activity") ?? report.activity,
+    a?.activity ?? null
+  );
+  push(
+    "Hazard",
+    fileOverrides.get("hazard"),
+    a?.hazard ?? null
+  );
+  push(
+    "Life-Saving Rule",
+    fileOverrides.get("life_saving_rule"),
+    a?.life_saving_rule ?? null
+  );
+  push(
+    "Barrier failure",
+    fileOverrides.get("barrier_failure"),
+    a?.barrier_failure?.length ? a.barrier_failure.join(", ") : null
+  );
+  push(
+    "Location detail",
+    fileOverrides.get("location"),
+    a?.location ?? null
+  );
+  push(
+    "Equipment",
+    fileOverrides.get("equipment"),
+    a?.equipment?.length ? a.equipment.join(", ") : null
+  );
+  push(
+    "Potential consequence",
+    fileOverrides.get("potential_consequence"),
+    a?.potential_consequence ?? null
+  );
+  push(
+    "SIF potential",
+    null,
+    a?.sif_potential == null ? null : a.sif_potential ? "Yes (flagged)" : "No"
+  );
+  push("Priority", null, a?.priority ?? null);
+  push(
+    "Confidence",
+    null,
+    a?.confidence != null ? `${Math.round(a.confidence * 100)}%` : null
+  );
+  push(
+    "Detected languages",
+    null,
+    a?.languages?.length ? a.languages.join(", ") : null
+  );
+
+  const srcMeta: Record<Src, { label: string; cls: string }> = {
+    file: { label: "Source file", cls: "bg-brand-100 text-brand-700" },
+    ai: { label: "AI text analysis", cls: "bg-violet-100 text-violet-700" },
+    none: { label: "Not stated", cls: "bg-slate-100 text-slate-500" },
+  };
+
+  return (
+    <div className="card">
+      <h2 className="card-title">
+        <ListChecks size={16} className="text-brand-600" /> Field Coverage — how
+        each field was populated
+      </h2>
+      <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+        Where a field existed in the imported file it is used as the
+        authoritative value (the AI crosscheck is kept and shown as “Modified = Y”
+        when it differs). Where the file is silent, the AI analyses the free
+        text to fill the field. “Not stated” means neither the file nor the
+        narrative provides it — nothing is invented.
+      </p>
+      <ul className="mt-3 divide-y divide-brand-50 overflow-hidden rounded-xl border border-brand-100">
+        {rows.map((r) => {
+          const meta = srcMeta[r.src];
+          return (
+            <li
+              key={r.label}
+              className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3.5 py-2 text-xs"
+            >
+              <span className="w-40 flex-shrink-0 text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                {r.label}
+              </span>
+              <span
+                className="min-w-0 flex-1 truncate font-medium text-ink"
+                title={r.title}
+              >
+                {r.value ?? "—"}
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${meta.cls}`}
+                title={
+                  r.src === "none"
+                    ? "Not present in the file and not inferable from the narrative"
+                    : r.src === "file"
+                      ? "Taken from the imported file (authoritative)"
+                      : "Inferred from the free-text narrative by the AI engine"
+                }
+              >
+                {meta.label}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

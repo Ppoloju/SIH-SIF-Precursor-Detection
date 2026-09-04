@@ -60,6 +60,9 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "rule_conditions": _JSON_TYPE,
         "modified_fields": _JSON_TYPE,
     },
+    "ingest_jobs": {
+        "duplicates": _JSON_TYPE,
+    },
 }
 
 

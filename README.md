@@ -31,14 +31,23 @@ An **AI Safety Early-Warning & SIF Precursor Intelligence Platform** that:
 7. Surfaces **recurring patterns** (e.g. repeated energy-isolation failures during maintenance) — never fabricated.
 8. Links **similar historical reports** — every stored report, dashboard row and fresh analysis shows its closest past matches with click-through.
 9. Provides an **HSE dashboard** and a **human-in-the-loop review + retraining workflow** where HSE experts confirm, reject or correct AI results and re-train the decision signals on those labels.
+10. **Dedicated HSE Reviewer workspace** (`/review`) — a separate inbox from the general Reports registry so reviewers are never lost among search/export/admin controls. It shows exactly what still needs a human decision (with a live pending-count badge in the nav), lets the reviewer **Verify as SIF / Not SIF** in one click, and lists verified and rejected records with clear, distinct badges ("Needs HSE review" vs "HSE verified" vs "Rejected · not SIF").
+11. **Missing-field intelligence made visible** — every report page shows a *Field Coverage* panel: each field is tagged **Source file** (authoritative when the file provides it), **AI text analysis** (filled by the engine when the file is silent) or **Not stated** (never fabricated). Values the file overrides are kept with the AI crosscheck as "Modified = Y".
+12. **Duplicate indication** — rows whose report text is stored more than once get a *Possible duplicate* badge in the Reports table (with a dedicated queue filter), and the report page flags semantic near-copies (closest match ≥ 88% similar) with a direct link to compare — so the same incident re-reported or a file imported twice is never analyzed twice silently.
+13. **Duplicate-safe imports** — when a dataset is imported, rows whose text already exists in the database (or is repeated inside the same file) are skipped automatically and reported as *duplicates skipped* on the import result — identical rows are never stored twice.
+14. **Similar solved case → reference (site A → site B)** — every similar report now carries its site and HSE review state. When the current report matches a case another site already verified (ideally with action notes), the report page highlights it as the reference and asks HSE to check whether the same corrective action applies.
+15. **Recurring pattern intelligence** — pattern cards are backed by the real member reports: click a pattern to open them in the registry (each report opens with its own similar history), and a *How patterns are found* popup documents the mapping criteria (rule+activity, rule+barrier, hazard+activity on ≥ 2 SIF-potential reports). Barrier cards link straight to the real report set instead of inline examples.
+16. **Field-derived estimation** — when a dataset omits the Life-Saving Rule (and the text gives no signal), the engine estimates it from the file's structured hazard/activity values and says so in the uncertainty note — the field is never left blank when derivable.
+- **App shell** — navigation lives in a fixed **left sidebar** on desktop (Work: Dashboard · HSE Review · Reports · Analyze · Import Data — Insights: Life-Saving Rules · Recurring Patterns · Site Risk · Activities · Barrier Failures · Model Evaluation), with a drawer on mobile. The SIF trend chart adds a **Bar + line** composed view, and non-English reports show a language chip (Hindi / Bengali / Assamese, native or romanised).
 
 ## Architecture
 
 ```
 ┌──────────────────────────────┐
-│       Next.js Frontend       │   Dashboard / Analyze / Import Data /
-│   (React + Tailwind + Recharts)  Reports / Rules / Sites / Activities /
-│                              │   Barriers / Patterns / Review
+│       Next.js Frontend       │   Dashboard / HSE Review / Analyze /
+│   (React + Tailwind + Recharts)  Import Data / Reports / Analytics
+│                              │   (Rules, Sites, Activities, Barriers,
+│                              │   Patterns, Evaluation)
 └──────────────┬───────────────┘
                │ REST API (JSON + multipart uploads)
                ▼
@@ -85,7 +94,8 @@ An **AI Safety Early-Warning & SIF Precursor Intelligence Platform** that:
 - **Generic dataset ingestion** — upload CSV / Excel / JSON with any column names; the engine auto-maps columns, runs every row through the pipeline, stores results (PostgreSQL or SQLite) and the dashboards update automatically.
 - **HSE Dashboard** — KPIs, SIF trend, Life-Saving Rule distribution, recent high-priority reports.
 - **Analytics pages** — Life-Saving Rules, Site Risk, Activities, Barrier Failures, Recurring Patterns. Metrics are labeled honestly (raw counts vs density) and never fabricated.
-- **HSE human review** — confirm / reject SIF, change priority or rule, edit comments, mark reviewed; feedback is stored for future model improvement.
+- **HSE human review** — a dedicated **Review Queue** page (nav badge shows pending count) plus the per-report panel: confirm / reject SIF, change priority or rule, edit comments, mark reviewed; feedback is stored for future model improvement. Badges are unambiguous: **Needs HSE review · HSE verified · HSE reviewed · HSE edited · Rejected · not SIF**.
+- **Reports registry** — search now spans the narrative plus IDs, site, activity, report type, Life-Saving Rule and hazard; filters cover report type/category, source file, review status and possible duplicates; the queue chips distinguish pending from HSE-verified from rejected.
 - **Multi-language detection** — Hindi, Assamese and Bengali reports (native script and romanised) are analyzed and mapped to the same rules, with the detected languages shown on the result. *A big differentiator for OIL's real, code-mixed reports.*
 - **Plain-language summary + suggested actions** — every analysis includes a three-part human-readable summary (“what happened / why it matters / next step”) and a concrete corrective-action checklist generated from the rule profile and failed barriers.
 - **Similar past reports** — deterministic semantic linking (text overlap + shared rule/hazard/barrier/activity) surfaces “N similar” on the dashboard, on the report detail page and right after an ad-hoc analysis, each clickable.
@@ -107,8 +117,9 @@ An **AI Safety Early-Warning & SIF Precursor Intelligence Platform** that:
 ```
 SIH-SIF-Precursor-Detection/
 ├── frontend/                  # Next.js application
-│   ├── app/                   # pages: /, /analyze, /ingest, /reports, /reports/[id],
-│   │                          #   /rules, /sites, /activities, /barriers, /patterns, /evaluation
+│   ├── app/                   # pages: /, /review (HSE queue), /analyze, /ingest,
+│   │                          #   /reports, /reports/[id], /rules, /sites,
+│   │                          #   /activities, /barriers, /patterns, /evaluation
 │   ├── components/            # nav (with dark/light toggle), footer, badges,
 │   │                          #   analysis-result card, rules-guide popup, theme provider
 │   └── lib/                   # typed API client, theme-aware chart palette
@@ -272,7 +283,8 @@ GET    /api/health
 POST   /api/reports/analyze        # analyze (store=true/false)
 POST   /api/reports                # create + analyze + store
 GET    /api/reports                # list (filters: site, activity, priority, rule, status, sif, q)
-GET    /api/reports/{id}           # full detail incl. analysis + review
+GET    /api/reports/counts         # quick counts: total / pending / verified / rejected / failed
+GET    /api/reports/{id}           # full detail incl. analysis + review + possible duplicate
 POST   /api/reports/{id}/reanalyze # re-run pipeline, update stored analysis
 PATCH  /api/reports/{id}/review    # HSE review decision
 POST   /api/ingest/file/preview    # upload dataset, preview mapping (no writes)

@@ -29,6 +29,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -119,7 +120,9 @@ export default function DashboardPage() {
   const [sites, setSites] = useState<SiteStat[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [chartKind, setChartKind] = useState<"area" | "line" | "bar">("area");
+  const [chartKind, setChartKind] = useState<
+    "area" | "line" | "bar" | "composed"
+  >("area");
 
   useEffect(() => {
     let cancelled = false;
@@ -476,7 +479,7 @@ export default function DashboardPage() {
               <TrendingUp size={16} className="text-brand-600" /> SIF Precursor
               Trend
             </h2>
-            {/* Chart-type switch — area / line / bar */}
+            {/* Chart-type switch — area / line / bar / composed (bar + line) */}
             <div
               className="flex items-center gap-0.5 rounded-lg border border-brand-200 bg-brand-50/60 p-0.5"
               role="group"
@@ -487,11 +490,17 @@ export default function DashboardPage() {
                   ["area", "Area"],
                   ["line", "Line"],
                   ["bar", "Bar"],
+                  ["composed", "Bar + line"],
                 ] as const
               ).map(([kind, label]) => (
                 <button
                   key={kind}
                   onClick={() => setChartKind(kind)}
+                  title={
+                    kind === "composed"
+                      ? "Bar for all reports with the SIF-potential overlaid as a line"
+                      : `Show the trend as a ${label.toLowerCase()} chart`
+                  }
                   className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
                     chartKind === kind
                       ? "bg-white text-brand-700 shadow-sm"
@@ -573,6 +582,24 @@ export default function DashboardPage() {
                     activeDot={{ r: 5 }}
                   />
                 </LineChart>
+              ) : chartKind === "composed" ? (
+                <ComposedChart data={trend} barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
+                  <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+                  <Tooltip contentStyle={tipStyle} cursor={{ fill: C.barCursor }} />
+                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={9} />
+                  <Bar dataKey="count" name="All reports" fill={C.all} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                  <Line
+                    type="monotone"
+                    dataKey="sif_count"
+                    name="SIF-potential"
+                    stroke={C.sif}
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
+                    activeDot={{ r: 5 }}
+                  />
+                </ComposedChart>
               ) : (
                 <BarChart data={trend} barGap={2}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />

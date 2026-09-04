@@ -179,6 +179,29 @@ html.dark .ambient {
   outline-offset: 2px;
 }
 
+/* Clickable affordance: interactive controls never keep the default arrow
+   cursor, so buttons / chips / dropdown triggers read as clickable at a
+   glance while static pills (badges, labels) keep the default pointer. */
+button:not(:disabled),
+[role="button"]:not(:disabled),
+select:not(:disabled),
+summary {
+  cursor: pointer;
+}
+
+/* Links that behave like text links underline on hover; nav-style links keep
+   their own pill styling. Hover transitions are intentionally subtle. */
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Card rows that link somewhere get a quiet "goes somewhere" cue on hover. */
+tr.table-row a,
+li a {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
 /* Recharts svg text follows the theme */
 .recharts-text {
   fill: var(--chart-text);

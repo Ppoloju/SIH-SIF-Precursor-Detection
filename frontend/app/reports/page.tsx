@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   AlertTriangle,
   BrainCircuit,
+  CopyCheck,
   Eye,
   FileText,
   GraduationCap,
@@ -15,6 +16,7 @@ import {
 import type { FeedbackSummary, ReportDetail, ReviewStatus, TrainResponse } from "@/lib/api";
 import { api } from "@/lib/api";
 import {
+  isVerified,
   PriorityBadge,
   ReviewBadge,
   REVIEW_LABELS,
@@ -24,13 +26,17 @@ import PageHeader from "@/components/PageHeader";
 import ExportButton from "@/components/ExportButton";
 
 const PRIORITIES = ["", "HIGH", "MEDIUM", "LOW"];
-const STATUSES: (ReviewStatus | "")[] = [
+// "verified" is a pseudo-status = any decision an HSE professional made
+// (confirmed / reviewed / edited) — handy for the queue chips.
+type StatusFilter = ReviewStatus | "" | "verified";
+const STATUSES: StatusFilter[] = [
   "",
+  "verified",
   "pending",
   "confirmed",
-  "rejected",
-  "edited",
   "reviewed",
+  "edited",
+  "rejected",
 ];
 
 export default function ReportsPage() {
@@ -46,6 +52,10 @@ export default function ReportsPage() {
   const [status, setStatus] = useState("");
   const [sif, setSif] = useState("");
   const [file, setFile] = useState("");
+  const [rtype, setRtype] = useState("");
+  const [hazard, setHazard] = useState("");
+  const [barrier, setBarrier] = useState("");
+  const [dupOnly, setDupOnly] = useState(false);
 
   // Human-in-the-loop: reviewed labels + "train" action.
   const [fb, setFb] = useState<FeedbackSummary | null>(null);
@@ -53,12 +63,22 @@ export default function ReportsPage() {
   const [trainResult, setTrainResult] = useState<TrainResponse | null>(null);
 
   useEffect(() => {
-    // Support deep links: ?priority=HIGH (dashboard review queue) and
-    // ?file=<source> (view all reports imported from one file).
+    // Support deep links: ?priority=HIGH (dashboard review queue),
+    // ?file=<source> (one imported file) and ?rule=/?activity=/?hazard=/
+    // ?barrier= (used by Recurring Patterns / Barrier cards to open the
+    // real report set behind a pattern).
     const params = new URLSearchParams(window.location.search);
     if (params.get("priority") === "HIGH") setPriority("HIGH");
     const f = params.get("file");
     if (f) setFile(f);
+    const rl = params.get("rule");
+    if (rl) setRule(rl);
+    const ac = params.get("activity");
+    if (ac) setActivity(ac);
+    const hz = params.get("hazard");
+    if (hz) setHazard(hz);
+    const br = params.get("barrier");
+    if (br) setBarrier(br);
   }, []);
 
   useEffect(() => {
@@ -101,20 +121,105 @@ export default function ReportsPage() {
     return Array.from(set).sort();
   }, [reports]);
 
+  // Distinct hazard + barrier values (used by the pattern deep links and the
+  // filter dropdowns).
+  const hazardOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(reports.map((r) => r.analysis?.hazard).filter((h): h is string => !!h))
+      ).sort(),
+    [reports]
+  );
+  const barrierOptions = useMemo(() => {
+    const set = new Set<string>();
+    reports.forEach((r) =>
+      (r.analysis?.barrier_failure ?? []).forEach((b) => set.add(b))
+    );
+    return Array.from(set).sort();
+  }, [reports]);
+
+  // Report categories found in the dataset (e.g. Unsafe Act / Unsafe
+  // Condition / Near Miss / Incident) — filterable like site & activity.
+  const reportTypes = useMemo(
+    () =>
+      Array.from(
+        new Set(reports.map((r) => r.report_type).filter((t): t is string => !!t))
+      ).sort(),
+    [reports]
+  );
+
+  // Duplicate indication: rows whose normalized text is stored more than once
+  // (same incident re-reported, or a file imported twice). Cheap client-side
+  // fingerprint — the report detail page adds semantic near-copy detection.
+  const dupGroups = useMemo(() => {
+    const byText = new Map<string, number[]>();
+    const idToReport = new Map(reports.map((r) => [r.id, r]));
+    for (const r of reports) {
+      const key = r.report_text
+        .toLowerCase()
+        .replace(/[^a-z0-9\u0900-\u09ff]+/g, " ")
+        .trim();
+      if (key.length < 8) continue;
+      const arr = byText.get(key) ?? [];
+      arr.push(r.id);
+      byText.set(key, arr);
+    }
+    const out = new Map<number, { count: number; others: string[] }>();
+    for (const ids of byText.values()) {
+      if (ids.length < 2) continue;
+      for (const id of ids) {
+        const others = ids
+          .filter((x) => x !== id)
+          .map((x) => idToReport.get(x)?.report_id ?? String(x));
+        out.set(id, { count: ids.length, others });
+      }
+    }
+    return out;
+  }, [reports]);
+
   const filtered = useMemo(() => {
     return reports.filter((r) => {
-      if (q && !r.report_text.toLowerCase().includes(q.toLowerCase())) return false;
+      // Field search: match across the narrative, IDs, site, activity, type,
+      // Life-Saving Rule and hazard — not just the report text.
+      if (
+        q &&
+        ![
+          r.report_text,
+          r.report_id,
+          r.source_id ?? "",
+          r.site ?? "",
+          r.activity ?? "",
+          r.report_type ?? "",
+          r.analysis?.life_saving_rule ?? "",
+          r.analysis?.hazard ?? "",
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(q.toLowerCase())
+      )
+        return false;
+      if (rtype && (r.report_type ?? "") !== rtype) return false;
+      if (dupOnly && !dupGroups.has(r.id)) return false;
       if (site && r.site !== site) return false;
       if (activity && (r.analysis?.activity ?? r.activity) !== activity) return false;
+      if (hazard && r.analysis?.hazard !== hazard) return false;
+      if (barrier) {
+        const hits = (r.analysis?.barrier_failure ?? []).some((b) =>
+          b.toLowerCase().includes(barrier.toLowerCase())
+        );
+        if (!hits) return false;
+      }
       if (priority && r.analysis?.priority !== priority) return false;
       if (rule && r.analysis?.life_saving_rule !== rule) return false;
-      if (status && r.review_status !== status) return false;
+      if (status === "verified") {
+        if (!isVerified(r.review_status)) return false;
+      } else if (status && r.review_status !== status) return false;
       if (file && r.source !== file) return false;
       if (sif === "true" && !r.analysis?.sif_potential) return false;
       if (sif === "false" && r.analysis?.sif_potential) return false;
       return true;
     });
-  }, [reports, q, site, activity, priority, rule, status, sif, file]);
+  }, [reports, q, site, activity, hazard, barrier, priority, rule, status, sif, file, rtype, dupOnly, dupGroups]);
 
   const files = useMemo(
     () =>
@@ -155,23 +260,29 @@ export default function ReportsPage() {
       ).sort(),
     [reports]
   );
-
   const counts = useMemo(
     () => ({
       total: reports.length,
       sif: reports.filter((r) => r.analysis?.sif_potential).length,
       high: reports.filter((r) => r.analysis?.priority === "HIGH").length,
-      pending: reports.filter((r) => r.review_status === "pending").length,
-      reviewed: reports.filter((r) => r.review_status && r.review_status !== "pending").length,
+      // "Needs HSE review" only counts analyzed rows without a decision;
+      // rows the pipeline failed to analyze are shown separately.
+      pending: reports.filter(
+        (r) => r.processing_status === "analyzed" && r.review_status === "pending"
+      ).length,
+      verified: reports.filter((r) => isVerified(r.review_status)).length,
+      rejected: reports.filter((r) => r.review_status === "rejected").length,
+      duplicates: reports.filter((r) => dupGroups.has(r.id)).length,
     }),
-    [reports]
+    [reports, dupGroups]
   );
 
   // Quick-review shortcuts — each sets one view and clears the others.
   function setView(
-    view: "all" | "sif" | "high" | "pending" | "reviewed",
+    view: "all" | "sif" | "high" | "pending" | "verified" | "rejected" | "duplicates",
   ) {
     setQ("");
+    setDupOnly(false);
     if (view === "all") {
       setSif("");
       setPriority("");
@@ -184,10 +295,14 @@ export default function ReportsPage() {
       setSif("");
       setPriority("HIGH");
       setStatus("");
-    } else if (view === "reviewed") {
+    } else if (view === "verified") {
       setSif("");
       setPriority("");
-      setStatus("reviewed");
+      setStatus("verified");
+    } else if (view === "rejected") {
+      setSif("");
+      setPriority("");
+      setStatus("rejected");
     } else {
       setSif("");
       setPriority("");
@@ -217,7 +332,8 @@ export default function ReportsPage() {
   const viewSif = sif === "true" && priority === "" && status === "";
   const viewHigh = priority === "HIGH" && sif === "" && status === "";
   const viewPending = status === "pending" && sif === "" && priority === "";
-  const viewReviewed = status === "reviewed" && sif === "" && priority === "";
+  const viewVerified = status === "verified" && sif === "" && priority === "";
+  const viewRejected = status === "rejected" && sif === "" && priority === "";
 
   // Export exactly what the user sees (filters + search applied). The system
   // Report ID and the file's Actual ID stay distinct, and the Status column is
@@ -294,10 +410,32 @@ export default function ReportsPage() {
           amber
         />
         <FilterChip
-          active={viewReviewed}
-          onClick={() => setView("reviewed")}
-          label="HSE reviewed"
-          count={counts.reviewed}
+          active={viewVerified}
+          onClick={() => setView("verified")}
+          label="HSE verified"
+          count={counts.verified}
+          green
+        />
+        <FilterChip
+          active={viewRejected}
+          onClick={() => setView("rejected")}
+          label="Rejected · not SIF"
+          count={counts.rejected}
+          orange
+        />
+        <FilterChip
+          active={dupOnly}
+          onClick={() => {
+            if (dupOnly) {
+              setDupOnly(false);
+            } else {
+              setView("all");
+              setDupOnly(true);
+            }
+          }}
+          label="Possible duplicates"
+          count={counts.duplicates}
+          violet
         />
         {!viewAll && (
           <button
@@ -380,7 +518,7 @@ export default function ReportsPage() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search report text…"
+              placeholder="Search text, ID, site, activity, rule…"
               className="w-full rounded-xl border border-brand-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-400"
             />
           </div>
@@ -426,13 +564,35 @@ export default function ReportsPage() {
             ))}
           </select>
           <select
+            value={hazard}
+            onChange={(e) => setHazard(e.target.value)}
+            className="rounded-xl border border-brand-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-400"
+          >
+            <option value="">All hazards</option>
+            {hazardOptions.map((h) => (
+              <option key={h}>{h}</option>
+            ))}
+          </select>
+          <select
+            value={barrier}
+            onChange={(e) => setBarrier(e.target.value)}
+            className="rounded-xl border border-brand-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-400"
+          >
+            <option value="">All barrier failures</option>
+            {barrierOptions.map((b) => (
+              <option key={b}>{b}</option>
+            ))}
+          </select>
+          <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             className="rounded-xl border border-brand-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-400"
           >
             {STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s ? `Status: ${REVIEW_LABELS[s]}` : "All statuses"}
+                {s
+                  ? `Status: ${s === "verified" ? "HSE checked (any)" : REVIEW_LABELS[s]}`
+                  : "All statuses"}
               </option>
             ))}
           </select>
@@ -444,6 +604,17 @@ export default function ReportsPage() {
             <option value="">SIF: All</option>
             <option value="true">SIF: Yes</option>
             <option value="false">SIF: No</option>
+          </select>
+          <select
+            value={rtype}
+            onChange={(e) => setRtype(e.target.value)}
+            title="Filter by report category from the source file (e.g. Unsafe Act / Unsafe Condition / Near Miss / Incident)"
+            className="rounded-xl border border-brand-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-400"
+          >
+            <option value="">All report types</option>
+            {reportTypes.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
           </select>
           <select
             value={file}
@@ -497,6 +668,12 @@ export default function ReportsPage() {
                 <th className="px-4 py-3 font-semibold">Mod.</th>
                 <th
                   className="px-4 py-3 font-semibold"
+                  title="Possible duplicate — the same report text stored more than once (re-reported incident / file imported twice)"
+                >
+                  Dup.
+                </th>
+                <th
+                  className="px-4 py-3 font-semibold"
                   title="HSE review state — rows the pipeline could not analyze show as failed"
                 >
                   Status
@@ -507,18 +684,20 @@ export default function ReportsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={13} className="px-4 py-12 text-center">
+                  <td colSpan={14} className="px-4 py-12 text-center">
                     <Loader2 className="mx-auto animate-spin text-brand-500" size={24} />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-4 py-12 text-center text-sm text-ink-muted">
+                  <td colSpan={14} className="px-4 py-12 text-center text-sm text-ink-muted">
                     No reports match the current filters.
                   </td>
                 </tr>
               ) : (
-                filtered.map((r) => (
+                filtered.map((r) => {
+                  const dupInfo = dupGroups.get(r.id);
+                  return (
                   <tr key={r.id} className="table-row">
                     <td className="px-4 py-3">
                       <Link
@@ -606,6 +785,18 @@ export default function ReportsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
+                      {dupInfo ? (
+                        <span
+                          className="badge badge-orange"
+                          title={`Possible duplicate — the same report text appears ${dupInfo.count} times in this dataset (also: ${dupInfo.others.join(", ")}). Review before duplicating any corrective action.`}
+                        >
+                          <CopyCheck size={11} /> ×{dupInfo.count}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-ink-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
                       {r.processing_status === "failed" ? (
                         <span
                           className="badge badge-red"
@@ -626,7 +817,8 @@ export default function ReportsPage() {
                       </Link>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -644,6 +836,9 @@ function FilterChip({
   pink,
   red,
   amber,
+  green,
+  orange,
+  violet,
 }: {
   label: string;
   count: number;
@@ -652,15 +847,25 @@ function FilterChip({
   pink?: boolean;
   red?: boolean;
   amber?: boolean;
+  green?: boolean;
+  orange?: boolean;
+  violet?: boolean;
 }) {
+  const activeTone = pink
+    ? "border-brand-600 bg-brand-600 text-white shadow-sm"
+    : red
+      ? "border-red-600 bg-red-600 text-white shadow-sm"
+      : amber
+        ? "border-amber-500 bg-amber-500 text-white shadow-sm"
+        : green
+          ? "border-green-600 bg-green-600 text-white shadow-sm"
+          : orange
+            ? "border-orange-600 bg-orange-600 text-white shadow-sm"
+            : violet
+              ? "border-violet-600 bg-violet-600 text-white shadow-sm"
+              : "border-ink bg-ink text-white";
   const tone = active
-    ? pink
-      ? "border-brand-500 bg-brand-600 text-white shadow-sm"
-      : red
-        ? "border-red-500 bg-red-600 text-white shadow-sm"
-        : amber
-          ? "border-amber-500 bg-amber-500 text-white shadow-sm"
-          : "border-ink text-white bg-ink"
+    ? activeTone
     : "border-brand-200 bg-white text-ink-soft hover:border-brand-300 hover:bg-brand-50";
   return (
     <button

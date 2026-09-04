@@ -385,6 +385,7 @@ export default function IngestPage() {
                 <Stat label="Imported" value={job.imported} />
                 <Stat label="SIF-potential" value={job.sif_potential} pink />
                 <Stat label="High priority" value={job.high_priority} red />
+                <Stat label="Duplicates skipped" value={job.duplicate_count ?? 0} />
                 <Stat label="Failed" value={job.failed_count} />
               </div>
               <p className="mt-3 text-[11px] text-ink-muted">
@@ -401,12 +402,31 @@ export default function IngestPage() {
               <h2 className="card-title text-green-700">
                 <CheckCircle2 size={16} /> Import complete — stored in the database
               </h2>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <StatBox label="Imported" value={`${job.imported}`} sub={`of ${job.rows_total} rows`} />
                 <StatBox label="SIF-potential" value={`${job.sif_potential}`} pink sub="precursors detected" />
                 <StatBox label="High priority" value={`${job.high_priority}`} red sub="require HSE review" />
+                <StatBox label="Duplicates skipped" value={`${job.duplicate_count ?? 0}`} sub="identical text — not stored twice" />
                 <StatBox label="Failed rows" value={`${job.failed_count}`} sub={job.skipped_empty ? `${job.skipped_empty} empty skipped` : "0 skipped"} />
               </div>
+
+              {(job.duplicates ?? []).length > 0 && (
+                <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-800">
+                  <p className="font-bold uppercase tracking-wider text-violet-700">
+                    Duplicates skipped (identical rows)
+                  </p>
+                  <p className="mt-1">
+                    {job.duplicates!.slice(0, 5).map((d) => (
+                      <span key={d.row} className="mr-3 inline-block">
+                        Row {d.row} → duplicate of {d.duplicate_of}
+                      </span>
+                    ))}
+                    {(job.duplicates?.length ?? 0) > 5 && (
+                      <span>… and {(job.duplicates?.length ?? 0) - 5} more</span>
+                    )}
+                  </p>
+                </div>
+              )}
 
               {job.failures.length > 0 && (
                 <div className="mt-3 max-h-40 overflow-y-auto rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -442,6 +462,7 @@ export default function IngestPage() {
                 "Any file: CSV, Excel, JSON — any column names",
                 "Auto map text / date / site / activity columns",
                 "Store raw rows in PostgreSQL with a processing status",
+                "Skip identical duplicates automatically (never stored twice)",
                 "Classify each row: SIF potential + Life-Saving Rule + priority",
                 "Progress & partial results commit in batches (live updates)",
                 "Dashboard, barriers and patterns update automatically",
