@@ -258,7 +258,7 @@
       <div class="flow">
         <div class="fstep io"><div class="n">1</div><div class="t">Give a report <span>Paste free text, or import a CSV / Excel / JSON export — columns are mapped automatically (any schema, dates parsed, missing fields inferred from text)</span></div></div>
         <div class="fconn">↓</div>
-        <div class="fstep"><div class="n">2</div><div class="t">Store it in PostgreSQL <span>each row is persisted with a processing status, so progress is visible in the database and the UI</span></div></div>
+        <div class="fstep"><div class="n">2</div><div class="t">Store it in the database <span>PostgreSQL when configured, SQLite by default — each row is persisted with a processing status, so progress is visible in the database and the UI</span></div></div>
         <div class="fconn">↓</div>
         <div class="fstep"><div class="n">3</div><div class="t">Run the AI engine <span>preprocessing → safety-indicator detection (English + Hindi/Bengali/Assamese phrases) → extraction → scoring</span></div></div>
         <div class="fconn">↓</div>
@@ -267,7 +267,7 @@
           <div class="fstep"><div class="n">5</div><div class="t">Mapping &amp; narrative <span>Life-Saving Rule + priority · plain-language summary · suggested corrective actions · detected languages</span></div></div>
         </div>
         <div class="fconn">↓</div>
-        <div class="fstep io"><div class="n">6</div><div class="t">Final output for one report <span>an explainable structured record — verdict, quoted evidence, explanation, similar past reports — stored back to PostgreSQL for HSE review</span></div></div>
+        <div class="fstep io"><div class="n">6</div><div class="t">Final output for one report <span>an explainable structured record — verdict, quoted evidence, explanation, similar past reports — stored back to the database for HSE review</span></div></div>
       </div>
     </div>
 
@@ -275,7 +275,7 @@
     <div class="flow-panel">
       <div class="fp-head grad"><span>Pass 2 — Analysing all reports over time</span><span class="tag">aggregation &amp; trends</span></div>
       <div class="flow">
-        <div class="fstep io"><div class="n">1</div><div class="t">Every analysed report lands in PostgreSQL <span>reports · analyses · reviews · feedback · training runs — one consistent dataset, whatever the source</span></div></div>
+        <div class="fstep io"><div class="n">1</div><div class="t">Every analysed report lands in the database <span>reports · analyses · reviews · feedback · training runs — one consistent dataset (PostgreSQL or SQLite), whatever the source</span></div></div>
         <div class="fconn">↓</div>
         <div class="fstep"><div class="n">2</div><div class="t">The analytics engine reads the database <span>KPIs · SIF density · trend by week · rule distribution · site and activity rankings · barrier failures · recurring patterns (≥2 reports only)</span></div></div>
         <div class="fconn">↓</div>
@@ -338,7 +338,7 @@
     <div class="center narrow">
       <span class="kicker">04 · The Dashboard</span>
       <h2>Answers questions, <span class="hl">not just charts</span></h2>
-      <p class="lede">This is a faithful picture of the running application. Every number below is computed live from PostgreSQL — no fabricated statistics — and the dashboard refreshes on focus and while visible.</p>
+      <p class="lede">In the running app every number is computed live from the database — SQLite by default, PostgreSQL when configured — no fabricated statistics. The mock below only illustrates the layout; the live dashboards refresh on focus and while visible.</p>
     </div>
 
     <div class="dash">
@@ -432,7 +432,7 @@
     <div class="center narrow">
       <span class="kicker">06 · Evaluation</span>
       <h2>Measured, <span class="hl">not just demoed</span></h2>
-      <p class="lede">The engine is held against a hand-labeled golden set of 35 reports — English, Hindi, Bengali and Assamese — with a live Evaluation page and CLI. Runs deterministically in ~35 ms.</p>
+      <p class="lede">The engine is held against a hand-labeled golden set of 35 reports — English, Hindi, Bengali and Assamese — with a live Evaluation page and CLI. Runs deterministically in ~20 ms.</p>
     </div>
 
     <div class="grid-4" style="margin-top:30px">
@@ -482,14 +482,14 @@
       <div class="aconn">▼</div>
       <div class="alayer">AI engine<small>rules + multilingual · extraction · narrative · similarity · optional LLM · learned signals</small></div>
       <div class="aconn">▼</div>
-      <div class="alayer pink">PostgreSQL<small>reports · analyses · reviews · feedback · training runs · rules · ingest jobs</small></div>
+      <div class="alayer pink">Database<small>PostgreSQL (Docker / Supabase) or SQLite fallback · reports · analyses · reviews · feedback · rules</small></div>
       <div class="aconn">▼</div>
       <div class="alayer soft">HSE expert<small>reviews, corrects — and the retraining loop feeds back into the engine</small></div>
     </div>
 
     <div class="grid-3" style="margin-top:32px">
       <div class="card"><h3>Frontend</h3><p>Next.js + React + Tailwind + Recharts. Live nav status ("Live · N reports"), auto-refresh while visible, CSV export on every data view, empty-state guidance when the database is empty.</p></div>
-      <div class="card"><h3>Backend &amp; engine</h3><p>Python + FastAPI + Pydantic v2. Dataset-agnostic ingestion (any columns, auto-mapping, background jobs with progress persisted in PostgreSQL).</p></div>
+      <div class="card"><h3>Backend &amp; engine</h3><p>Python + FastAPI + Pydantic v2. Dataset-agnostic ingestion (any columns, auto-mapping, background jobs with progress visible live).</p></div>
       <div class="card"><h3>Database</h3><p>PostgreSQL via SQLAlchemy — additive migrations run automatically. A local SQLite fallback keeps the code demo-able without Docker.</p></div>
     </div>
   </div>
@@ -501,7 +501,7 @@
     <div class="center narrow">
       <span class="kicker">08 · Run &amp; Roadmap</span>
       <h2>Turn it on, point it at <span class="hl">your dataset</span></h2>
-      <p class="lede">The application starts empty (SEED_DEMO_DATA=0) so you can verify it against your own reports. Full run instructions live in the repository README.</p>
+      <p class="lede">The application starts with an empty database (no demo seeding in this build) so you can verify it against your own reports. Full run instructions live in the repository README.</p>
     </div>
 
     <div style="max-width:780px;margin:26px auto 0">
@@ -514,20 +514,18 @@ uvicorn app.main:app --port 8000        <span class="c"># creates schema; empty 
 
 # 3 · frontend
 cd frontend &amp;&amp; npm install &amp;&amp; npm run dev   <span class="c"># http://127.0.0.1:3000</span></pre>
-      <div class="callout"><b>Import your data:</b> open <b>Import Data</b>, upload any CSV / Excel / JSON export (or paste JSON) — watch the job progress bar, then explore Reports, Dashboard, Rules, Sites, Activities, Barriers, Patterns and Evaluation. Want the 45 labeled demo reports back? Set <code>SEED_DEMO_DATA=1</code> and restart.</div>
+      <div class="callout"><b>Import your data:</b> open <b>Import Data</b> in the sidebar, upload any CSV / Excel / JSON export — watch the job progress bar, then explore Reports, Dashboard, Rules, Sites, Activities, Barriers, Patterns and Evaluation. Demo seeding is disabled in this build, so the database never fills itself: every report you see comes from a real import.</div>
     </div>
 
     <h3 style="text-align:center;margin-top:44px">Roadmap</h3>
     <div class="grid-2">
-      <div class="card"><h3>Shipped in this prototype</h3>
+      <div class="card"><h3>Also in this prototype</h3>
         <ul class="check">
-          <li>Any-dataset ingestion with live job progress</li>
-          <li>SIF detection with evidence, hazard, barrier, rule, priority</li>
-          <li>Hindi / Bengali / Assamese detection (native + roman)</li>
-          <li>Plain-language summary + suggested actions</li>
-          <li>Similar-report search across the UI</li>
-          <li>HSE review + feedback → retraining loop</li>
-          <li>Evaluation harness with per-rule and per-language metrics</li>
+          <li>Duplicate-safe imports — identical rows skipped, near-copies flagged</li>
+          <li>Field coverage tags — Source file vs AI text analysis vs Not stated</li>
+          <li>Solved case as a cross-site reference (site A → site B)</li>
+          <li>Dedicated HSE Reviewer workspace with a live pending-count badge</li>
+          <li>Trend chart types (area / line / bar / bar+line) with a counts ⇌ density toggle</li>
         </ul>
       </div>
       <div class="card"><h3>Next</h3>
@@ -548,9 +546,9 @@ cd frontend &amp;&amp; npm install &amp;&amp; npm run dev   <span class="c"># ht
   <div class="f-logo">SIF Precursor Detection</div>
   <p>AI/NLP engine to detect Serious Injury &amp; Fatality precursors in Unsafe-Act / Unsafe-Condition and Near-Miss reports.</p>
   <p>Smart India Hackathon 2026 · Problem Statement 26165 · Oil India Limited · Theme: Smart Automation</p>
-  <p style="font-size:12px">Prototype · AI-assisted · Requires HSE/OIL validation · Running live: frontend :3000 · API :8000 · PostgreSQL :5432</p>
+  <p style="font-size:12px">Prototype · AI-assisted · Requires HSE/OIL validation · Running live: frontend :3000 · API :8000 · SQLite database (PostgreSQL via Docker when configured)</p>
   <div class="footlinks">
-    <a href="https://github.com/" target="_blank" rel="noopener">Repository</a>
+    <a href="../README.md">README (run book)</a>
     <a href="processing.html">How data is processed</a>
     <a href="http://127.0.0.1:3000" target="_blank" rel="noopener">Open the live app</a>
   </div>

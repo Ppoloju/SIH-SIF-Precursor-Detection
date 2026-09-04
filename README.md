@@ -18,27 +18,24 @@ This is a **prototype for SIH demonstration**. It uses **synthetic demo data** (
 
 OIL collects large volumes of safety reports through its HSSE platform — Unsafe Acts (UA), Unsafe Conditions (UC), Near-Misses and Incidents — much of it free text. A report that **looks low-severity may still contain conditions with genuine Serious Injury or Fatality potential**. Manual periodic triage makes it hard to find these precursors early and to see where the same problems recur.
 
-## Our Solution
+## What it does
 
-An **AI Safety Early-Warning & SIF Precursor Intelligence Platform** that:
+An **AI Safety Early-Warning & SIF Precursor Intelligence Platform** that screens every report the moment it arrives and lets HSE experts focus where fatal potential is highest. It is an early-warning decision-support layer — it does not replace OIL's HSE process or experts. Concretely, the platform:
 
-1. Ingests free-text safety reports (UA / UC / near-miss / incident).
-2. Detects potential SIF precursors with a **hybrid, explainable NLP pipeline**.
-3. Shows **evidence** — the exact phrases that triggered the flag.
-4. Extracts hazard, potential consequence, barrier failure, activity, equipment.
-5. Maps reports to the relevant **Life-Saving Rule** — the canonical ten: Work Authorization, Energy Isolation, Bypassing Safety Controls, Confined Space Entry, Working at Height, Safe Mechanical Lifting, Toxic Gas Safety, Driving Safety, Line of Fire, Hot Work Safety.
-6. Assigns a transparent **AI-assisted priority** (HIGH / MEDIUM / LOW) — prototype methodology.
-7. Surfaces **recurring patterns** (e.g. repeated energy-isolation failures during maintenance) — never fabricated.
-8. Links **similar historical reports** — every stored report, dashboard row and fresh analysis shows its closest past matches with click-through.
-9. Provides an **HSE dashboard** and a **human-in-the-loop review + retraining workflow** where HSE experts confirm, reject or correct AI results and re-train the decision signals on those labels.
-10. **Dedicated HSE Reviewer workspace** (`/review`) — a separate inbox from the general Reports registry so reviewers are never lost among search/export/admin controls. It shows exactly what still needs a human decision (with a live pending-count badge in the nav), lets the reviewer **Verify as SIF / Not SIF** in one click, and lists verified and rejected records with clear, distinct badges ("Needs HSE review" vs "HSE verified" vs "Rejected · not SIF").
-11. **Missing-field intelligence made visible** — every report page shows a *Field Coverage* panel: each field is tagged **Source file** (authoritative when the file provides it), **AI text analysis** (filled by the engine when the file is silent) or **Not stated** (never fabricated). File-provided values are authoritative and used as-is; the engine only fills fields the file leaves blank.
-12. **Duplicate indication** — rows whose report text is stored more than once get a *Possible duplicate* badge in the Reports table (with a dedicated queue filter), and the report page flags semantic near-copies (closest match ≥ 88% similar) with a direct link to compare — so the same incident re-reported or a file imported twice is never analyzed twice silently.
-13. **Duplicate-safe imports** — when a dataset is imported, rows whose text already exists in the database (or is repeated inside the same file) are skipped automatically and reported as *duplicates skipped* on the import result — identical rows are never stored twice.
-14. **Similar solved case → reference (site A → site B)** — every similar report now carries its site and HSE review state. When the current report matches a case another site already verified (ideally with action notes), the report page highlights it as the reference and asks HSE to check whether the same corrective action applies.
-15. **Recurring pattern intelligence** — pattern cards are backed by the real member reports: click a pattern to open them in the registry (each report opens with its own similar history), and a *How patterns are found* popup documents the mapping criteria (rule+activity, rule+barrier, hazard+activity on ≥ 2 SIF-potential reports). Barrier cards link straight to the real report set instead of inline examples.
-16. **Field-derived estimation** — when a dataset omits the Life-Saving Rule (and the text gives no signal), the engine estimates it from the file's structured hazard/activity values and says so in the uncertainty note — the field is never left blank when derivable.
-- **App shell** — navigation lives in a fixed **left sidebar** on desktop (Work: Dashboard · HSE Review · Reports · Analyze · Import Data — Insights: Life-Saving Rules · Recurring Patterns · Site Risk · Activities · Barrier Failures · Model Evaluation), with a drawer on mobile. The SIF trend chart adds a **Bar + line** composed view, and non-English reports show a language chip (Hindi / Bengali / Assamese, native or romanised).
+1. **Ingests any dataset** — CSV / Excel / JSON / TSV / TXT with any column names. Headers are auto-mapped by synonym scoring (preview before import, overridable), dates are parsed across formats, and imports run as background jobs whose progress is persisted and visible live. Rows whose text already exists are skipped and reported as duplicates — nothing is stored twice silently.
+2. **Analyses every report** with a hybrid, explainable NLP pipeline: SIF-potential detection with **verbatim quoted evidence** (English + Hindi + Bengali + Assamese, native script and romanised), then structured extraction of hazard, potential consequence, barrier failure, activity, location, equipment and unsafe type.
+3. **Maps each report to one of the ten canonical Life-Saving Rules** — Work Authorization, Energy Isolation, Bypassing Safety Controls, Confined Space Entry, Working at Height, Safe Mechanical Lifting, Toxic Gas Safety, Driving Safety, Line of Fire, Hot Work Safety — with per-condition `breached / in_place / not_verifiable` verdicts and the exact wording each was inferred from. When neither the file nor the text states a rule, it is estimated from the file's hazard/activity values and the derivation is stated honestly.
+4. **Is honest about every field.** Each report shows a *Field Coverage* panel: **Source file** (authoritative, used as-is), **AI text analysis** (filled only when the file is silent), or **Not stated** (never fabricated). File-provided values win over AI extraction, which is retained for reference only. Uncertainty notes surface any inferred or learned value, and the model tag (`rules-v1`, `rules-v1+llm`, `rules-v1+tuned`) records provenance.
+5. **Assigns a transparent, explainable priority** (HIGH / MEDIUM / LOW) from four stored factors — matched indicators (capped at 3), consequence severity (0–2), people exposure (0–1), barrier failure (0–1); HIGH ≥ 5, MEDIUM ≥ 3, else LOW. Every report shows a "how it was calculated" breakdown. Confidence = `min(0.97, 0.62 + 0.11·indicators + 0.05·severity)`. This is a prototype methodology, not an official OIL risk score.
+6. **Reads multilingual reports** — Hindi, Bengali and Assamese (Devanagari/Bengali script and romanised Hinglish/Benglish) map the same explicit failure phrases to the same rules, evidence stays in the original words, and detected languages are shown on the result. *A big differentiator for OIL's real, code-mixed reports.*
+7. **Links every report to history** — "N similar" past reports (text overlap + shared rule / hazard / barrier / activity, with the shared fields shown so the score is auditable) appear on the dashboard, the report page and after each fresh analysis. When a current report matches a case another site already **verified** (ideally with action notes), that case is highlighted as the reference (site A → site B learning). Near-copies (similarity ≥ 0.88) are flagged `duplicate_of` with a compare link.
+8. **Finds recurring patterns** — co-occurrence grouping of ≥ 2 SIF-potential reports by rule+activity / rule+barrier / hazard+activity, always backed by the real member reports: click a pattern to open them in the Reports registry, and a *How patterns are found* popup documents the mapping criteria.
+9. **Keeps dashboards honest** — KPIs, weekly SIF trend (the same data switchable between area / line / bar / bar+line), SIF precursor density (SIF-potential ÷ total) with a counts ⇄ density toggle, Life-Saving-Rule distribution, site / activity / barrier-failure analytics — raw counts labeled separately from density, nothing fabricated. Every view exports to CSV with the current filters.
+10. **Separates the HSE Reviewer from the everyday user** — a dedicated **HSE Review** workspace (`/review`) with a live pending-count badge in the nav. Reviewers see only what still needs a human decision, click **Verify as SIF / Not SIF** once, correct priority or rule, and leave comments. Clear badges distinguish *Needs HSE review · HSE verified · HSE reviewed · HSE edited · Rejected · not SIF*.
+11. **Closes the loop with feedback → retraining** — every review decision is stored as a labelled example; *Train on reviewed labels* recomputes model↔human agreement (precision / recall / F1), mines the surface phrases behind disagreements and applies them as weighted, review-flagged signals to future analyses. A learned keyword alone never flips a verdict.
+12. **Measures itself** — the live **Model Evaluation** page runs two benchmarks end-to-end (see [Evaluation](#evaluation)): the deterministic golden-set harness (35 hand-labelled reports, P/R/F1 1.000, multilingual 19/19) with a stratified k-fold stability check, and a statistical ML benchmark — stratified 5-fold CV over a 500-report dataset (Multinomial Naive Bayes, Logistic Regression, Linear SVM vs the rule engine baseline, F₂-weighted).
+13. **Has a clean app shell** — fixed **left sidebar** on desktop (Work: Dashboard · HSE Review · Reports · Analyze · Import Data — Insights: Life-Saving Rules · Recurring Patterns · Site Risk · Activities · Barrier Failures · Model Evaluation), a drawer on mobile, a light/dark toggle in the sidebar footer (and mobile top bar), and a live backend-status indicator.
+14. **Degrades gracefully** — the deterministic rules always run: no LLM key means no polish pass, no PostgreSQL means a local SQLite file, and analysis still works offline.
 
 ## Architecture
 
@@ -78,13 +75,12 @@ An **AI Safety Early-Warning & SIF Precursor Intelligence Platform** that:
 | Layer | Purpose |
 |---|---|
 | **Rules** | Deterministic, negation-aware baseline detection of obvious SIF indicators (energy isolation, LOTO, gas testing, fall protection…). Always available, fully explainable. |
-| **Multilingual layer** | Understands Hindi, Bengali and Assamese safety reports — Devanagari/Bengali script and romanised Hinglish/Benglish — mapping the same explicit failure phrases to the same Life-Saving Rules and quoting the original text as evidence. |
-| **NLP / ML** | Structured extraction (activity, hazard, barrier, equipment, unsafe act/condition). Traditional ML slots in here when labeled OIL data becomes available. |
-| **Narrative** | Deterministic plain-language summary (“what happened / why it matters / next step”) + rule-based corrective-action checklist from the structured result. |
+| **Multilingual layer** | Understands Hindi, Bengali and Assamese safety reports — native script and romanised — mapping the same explicit failure phrases to the same Life-Saving Rules and quoting the original text as evidence. |
+| **NLP / ML** | Structured extraction (activity, hazard, barrier, equipment, unsafe act/condition). Statistical ML slots in here via the evaluation benchmark and, when labelled OIL data becomes available, for classification. |
 | **Similarity** | Similar-report linking from text overlap + shared rule / hazard / barrier / activity — no external model required, works across languages. |
-| **LLM (Llama via Groq, optional)** | Complex interpretation, explanation polish, summary rephrase and follow-up suggestions — **Pydantic-validated, with graceful fallback** to the deterministic result when unavailable or invalid. |
+| **LLM (Llama via Groq, optional)** | Polish only: rephrases explanations / summaries into the report's language — **Pydantic-validated, with graceful fallback** to the deterministic result when unavailable or invalid. |
 | **Feedback → retraining** | Every HSE review is stored as a labeled example; *Train on reviewed labels* measures model↔human agreement and learns signals from the disagreements, which tune future analyses. |
-| **Human** | HSE professionals make the final call through the review workflow. |
+| **Human** | HSE professionals make the final call through the dedicated review workflow. |
 
 ## Algorithms Used
 
@@ -92,37 +88,20 @@ Everything below runs offline, is deterministic and explainable — the optional
 
 | # | Algorithm / method | What it does | Where it lives |
 |---|---|---|---|
-| 1 | **Negation-aware rule matching** | Keyword + phrase patterns per Life-Saving Rule, matched with negation detection (“without isolation”, “no permit”, “missing guard”) so a control that is *present* is not flagged as breached. Quotes the exact evidence phrase. | `safety_lexicon.py`, `sif_detector.py` |
-| 2 | **Additive priority scoring** | `score = min(matched_indicators, 3) + severity_bonus(0–2) + people_exposure(0–1) + barrier_failure(0–1)`; HIGH ≥ 5, MEDIUM ≥ 3, else LOW. Confidence = `0.62 + 0.11·indicators + 0.05·severity`, capped at 0.97. The four factors are stored per report and shown as a “how it was calculated” breakdown. | `risk_scorer.py` |
-| 3 | **Life-Saving-Rule classification** | Per-condition mapping of the text to each rule's requirements with a `breached / in_place / not_verifiable` verdict and per-condition evidence. | `rules` engine + `rule_conditions` |
-| 4 | **Rule estimation from structured fields** | When the file/text gives no Life-Saving Rule signal, the rule is estimated from the file's own hazard/activity values (e.g. hazard “confined space entry” → Confined Space Entry) and the derivation is stated in the uncertainty note. | `ingest.py` (`estimate_rule_from_fields`) |
-| 5 | **Language detection (multilingual)** | Script detection for Devanagari / Bengali / Assamese plus romanised Hinglish / Benglish lexicons; the same failure phrases map to the same rules across languages. | `languages` in the analysis pipeline |
+| 1 | **Negation-aware rule matching** | Keyword + phrase patterns per Life-Saving Rule, matched with negation detection ("without isolation", "no permit", "missing guard") so a control that is *present* is not flagged as breached. Quotes the exact evidence phrase. | `safety_lexicon.py`, `sif_detector.py` |
+| 2 | **Additive priority scoring** | `score = min(matched_indicators, 3) + severity_bonus(0–2) + people_exposure(0–1) + barrier_failure(0–1)`; HIGH ≥ 5, MEDIUM ≥ 3, else LOW. Confidence = `0.62 + 0.11·indicators + 0.05·severity`, capped at 0.97. The four factors are stored per report and shown as a "how it was calculated" breakdown. | `risk_scorer.py` |
+| 3 | **Life-Saving-Rule classification** | Per-condition mapping of the text to each rule's requirements with a `breached / in_place / not_verifiable` verdict and per-condition evidence. | `rule_classifier.py`, `rule_mapper.py` |
+| 4 | **Rule estimation from structured fields** | When the file/text gives no Life-Saving Rule signal, the rule is estimated from the file's own hazard/activity values (e.g. hazard "confined space entry" → Confined Space Entry) and the derivation is stated in the uncertainty note. | `ingest.py` (`estimate_rule_from_fields`) |
+| 5 | **Language detection (multilingual)** | Script detection for Devanagari / Bengali / Assamese plus romanised Hinglish / Benglish lexicons; the same failure phrases map to the same rules across languages. | `multilingual.py` |
 | 6 | **Hybrid similarity linking** | Similar-report score from token overlap (normalised word-level similarity) **plus** shared rule / hazard / barrier / activity concept bonuses (capped low so genuine near-copies outscore distinct-but-related precursors). Scores are shown with the shared fields on the report page. | `similarity.py` |
-| 7 | **Duplicate detection** | Import-time text fingerprinting skips identical rows (reported as “Row N → duplicate of RPT-x”) and near-copies (similarity ≥ 0.88) are flagged as `duplicate_of` on the report detail. | `ingest.py`, `reports.py` (`DUP_SIMILARITY = 0.88`) |
-| 8 | **Feedback → retraining loop** | Every HSE review is stored as a labelled example; “Train on reviewed labels” computes model↔human agreement (precision / recall / F1), mines the surface phrases of disagreements, and applies them as weighted learned signals to future analyses. | `adaptive.py` |
+| 7 | **Duplicate detection** | Import-time text fingerprinting skips identical rows (reported as "Row N → duplicate of RPT-x") and near-copies (similarity ≥ 0.88) are flagged as `duplicate_of` on the report detail. | `ingest.py`, `reports.py` (`DUP_SIMILARITY = 0.88`) |
+| 8 | **Feedback → retraining loop** | Every HSE review is stored as a labelled example; "Train on reviewed labels" computes model↔human agreement (precision / recall / F1), mines the surface phrases of disagreements, and applies them as weighted learned signals to future analyses. | `adaptive.py` |
 | 9 | **Honest field inference** | Each field is tagged *Source file* (authoritative), *AI text analysis* (inferred), or *Not stated* — the engine never fabricates values; file-provided values are used as-is and the AI extraction is kept for reference. | `ingest.py`, `analysis_pipeline.py` |
 | 10 | **Recurring-pattern mining** | Co-occurrence grouping of ≥ 2 SIF-potential reports by rule+activity / rule+barrier / hazard+activity, backed by the real member reports and clickable into the filtered registry. | `analytics.py` (`/patterns`) |
 | 11 | **Trend & density analytics** | Weekly trend bucketing; SIF precursor density = SIF-potential ÷ total reports; week-over-week deltas; chart types area / line / bar / bar+line on the same data. | `analytics.py`, dashboard |
-| 12 | **Evaluation harness + stability CV** | Holdout golden set (35 hand-labelled reports across EN/HI/BN/AS) with per-class and per-rule precision / recall / F1, plus a stratified k-fold stability check (mean ± std and 95% CI over folds stratified by SIF label × language). | `evaluation.py` (`run_evaluation`, `run_kfold_cv`) · page + CLI |
-| 13 | **LLM refinement (optional)** | Llama (Groq) rephrases explanations / summaries / follow-ups with Pydantic-validated output and deterministic fallback when unavailable. | `llm.py` |
-
-## Features
-
-- **SIF-potential detection** with evidence, hazard, potential consequence, barrier failure, Life-Saving Rule, confidence and a grounded explanation.
-- **Honest information extraction** — values are `Not specified` when not stated; `explicit` vs `AI-inferred` is distinguished where relevant; nothing is invented.
-- **Report analysis UI** — paste any report, get an explainable structured result.
-- **Generic dataset ingestion** — upload CSV / Excel / JSON with any column names; the engine auto-maps columns, runs every row through the pipeline, stores results (PostgreSQL or SQLite) and the dashboards update automatically.
-- **HSE Dashboard** — KPIs, SIF trend, Life-Saving Rule distribution, recent high-priority reports.
-- **Analytics pages** — Life-Saving Rules, Site Risk, Activities, Barrier Failures, Recurring Patterns. Metrics are labeled honestly (raw counts vs density) and never fabricated.
-- **HSE human review** — a dedicated **Review Queue** page (nav badge shows pending count) plus the per-report panel: confirm / reject SIF, change priority or rule, edit comments, mark reviewed; feedback is stored for future model improvement. Badges are unambiguous: **Needs HSE review · HSE verified · HSE reviewed · HSE edited · Rejected · not SIF**.
-- **Reports registry** — search now spans the narrative plus IDs, site, activity, report type, Life-Saving Rule and hazard; filters cover report type/category, source file, review status and possible duplicates; the queue chips distinguish pending from HSE-verified from rejected.
-- **Multi-language detection** — Hindi, Assamese and Bengali reports (native script and romanised) are analyzed and mapped to the same rules, with the detected languages shown on the result. *A big differentiator for OIL's real, code-mixed reports.*
-- **Plain-language summary + suggested actions** — every analysis includes a three-part human-readable summary (“what happened / why it matters / next step”) and a concrete corrective-action checklist generated from the rule profile and failed barriers.
-- **Similar past reports** — deterministic semantic linking (text overlap + shared rule/hazard/barrier/activity) surfaces “N similar” on the dashboard, on the report detail page and right after an ad-hoc analysis, each clickable.
-- **Feedback → retraining loop** — HSE review decisions are stored as labeled examples (`feedback` table); the *Train on reviewed labels* button recomputes model↔human agreement (precision/recall/F1), mines learned signal phrases from the disagreements and applies them (marked `rules-v1+tuned`) to future analyses.
-- **Evaluation harness** — a hand-labeled golden set of 35 reports (English + Hindi + Bengali + Assamese) with a live **Evaluation** page and CLI showing SIF classification and per-Life-Saving-Rule precision / recall / F1 — no fabricated numbers.
-- **Light & dark themes** — an OIL-appropriate design system: deep navy primary, charcoal ink, light-gray canvas, with red/orange (danger), amber (warning), green (validated) and violet (AI accent) keeping their meanings. The header moon/sun toggle remembers your choice; the first visit follows the OS preference. Charts, tooltips and every view re-tint live without a reload.
-- **Graceful degradation** — no LLM key, no embeddings model, no database? The API still runs on deterministic rules with a local SQLite fallback.
+| 12 | **Golden-set evaluation + stability CV** | Holdout golden set (35 hand-labelled reports across EN/HI/BN/AS) with per-class and per-rule precision / recall / F1, plus a stratified k-fold stability check (mean ± std and 95% CI over folds stratified by SIF label × language). | `evaluation.py` (`run_evaluation`, `run_kfold_cv`) · page + CLI |
+| 13 | **Stratified 5-fold ML benchmark** | Statistical models (Multinomial Naive Bayes, Logistic Regression, Linear SVM) vs the rule-engine baseline over a 500-report dataset, TF-IDF fit inside each fold to prevent leakage, F₂-weighted metrics + decision-threshold sensitivity. | `model_evaluation.py` (`evaluate_sif_models`) · `/api/model/evaluate` |
+| 14 | **LLM refinement (optional)** | Llama (Groq) rephrases explanations / summaries / follow-ups with Pydantic-validated output and deterministic fallback when unavailable. | `llm.py` |
 
 ## Technology Stack
 
@@ -130,15 +109,11 @@ Everything below runs offline, is deterministic and explainable — the optional
 
 **Backend:** Python · FastAPI · Pydantic v2 · SQLAlchemy
 
-**AI/NLP:** Rule-based NLP + multilingual lexicons (primary) · Llama via Groq (optional) · scikit-learn / Sentence Transformers (optional, when labeled data/keys available)
+**AI/NLP:** Rule-based NLP + multilingual lexicons (primary) · Llama via Groq (optional) · scikit-learn / pandas (evaluation benchmark; optional when labeled data is available)
 
-**Database:** Local PostgreSQL or SQLite fallback
-<<<<<<< HEAD
-**Docs:** `docs/index.html` project showcase · `docs/processing.html` data-processing stages and the algorithm behind every output field
-=======
+**Database:** PostgreSQL (local Docker or Supabase) with a zero-setup SQLite fallback — one code path, selected by `DATABASE_URL`
 
-**Docs:** standalone `docs/index.html` showcase · `docs/MANUAL_TESTING.md` step-by-step QA checklist
->>>>>>> 45f8118d6c50a12fdba1e11818f497847069b30b
+**Docs (see also the "Documentation map" below):** `docs/index.html` project showcase with the user flows · `docs/processing.html` data-processing stages and the algorithm behind every output field
 
 ## Repository Structure
 
@@ -148,31 +123,36 @@ SIH-SIF-Precursor-Detection/
 │   ├── app/                   # pages: /, /review (HSE queue), /analyze, /ingest,
 │   │                          #   /reports, /reports/[id], /rules, /sites,
 │   │                          #   /activities, /barriers, /patterns, /evaluation
-│   ├── components/            # nav (with dark/light toggle), footer, badges,
-│   │                          #   analysis-result card, rules-guide popup, theme provider
-│   └── lib/                   # typed API client, theme-aware chart palette
+│   ├── components/            # nav (sidebar, dark/light toggle), footer, badges,
+│   │                          #   analysis-result card, rules-guide popup,
+│   │                          #   export button, theme provider
+│   └── lib/                   # typed API client, chart palette, export helpers
 ├── backend/
 │   ├── app/
-│   │   ├── main.py            # FastAPI entrypoint (lifespan seeds demo data)
-│   │   ├── config.py          # settings from env
-│   │   ├── api/               # reports, ingest, review, analytics, feedback, evaluation routers
-│   │   ├── services/          # sif_detector, rule_classifier, information_extractor,
-│   │   │                      # risk_scorer, analysis_pipeline, ingest, llm,
-│   │   │                      # safety_lexicon, multilingual, narrative, similarity,
-│   │   │                      # adaptive (feedback->retrain), evaluation (golden-set metrics)
+│   │   ├── main.py            # FastAPI entrypoint (startup init, health)
+│   │   ├── config.py          # settings from env (DB URL, LLM key, CORS)
+│   │   ├── api/               # reports, review, ingest, analytics, feedback, evaluation
+│   │   ├── services/          # sif_detector, safety_lexicon, multilingual,
+│   │   │                      # rule_classifier, rule_mapper, information_extractor,
+│   │   │                      # risk_scorer, analysis_pipeline, narrative, similarity,
+│   │   │                      # ingest, adaptive (feedback→retrain),
+│   │   │                      # evaluation (golden set + k-fold), model_evaluation (ML CV)
 │   │   ├── models/            # SQLAlchemy entities + engine/session (reports, analyses,
 │   │   │                      #   reviews, feedback, training_runs, life_saving_rules…)
 │   │   ├── schemas/           # Pydantic schemas
-│   │   └── data/              # life_saving_rules, demo dataset, golden evaluation set
-│   ├── scripts/               # engine verification + API smoke/ingest tests
+│   │   └── data/              # life_saving_rules, demo dataset, golden evaluation set,
+│   │                          #   oil_hsse_sif_dataset (500 rows for the ML benchmark)
+│   ├── scripts/               # evaluate, verify_engine, verify_ingest, smoke_api,
+│   │                          #   generate_dataset, clear_database
 │   ├── requirements.txt
 │   └── README.md
 ├── docs/
-│   └── index.html             # polished standalone documentation site
+│   ├── index.html             # showcase — what/why + user flows + mock outputs
+│   └── processing.html        # deep dive — processing stages + per-field algorithms
 ├── docker-compose.yml         # local PostgreSQL for the real database flow
 ├── .env.example
 ├── .gitignore
-└── README.md
+└── README.md                  # this run book
 ```
 
 ## Setup
@@ -180,55 +160,32 @@ SIH-SIF-Precursor-Detection/
 ### Prerequisites
 - Python 3.11+ and Node.js 18+
 
-### Quick start (three terminals)
-
-```bash
-# terminal 1 — real database flow (optional: default is a zero-setup SQLite file)
-#   docker compose up -d   # + DATABASE_URL in backend/.env -> see "Using PostgreSQL"
-
-# terminal 2 — backend API  ->  http://127.0.0.1:8000/docs
-cd backend
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-
-# terminal 3 — web app  ->  http://127.0.0.1:3000
-cd ../frontend
-npm install
-npm run dev
-```
-
-Then open http://127.0.0.1:3000, go to **Import Data** and upload your own CSV / Excel / JSON (or paste JSON rows). Each row is stored, analysed by the AI engine and shown on the dashboard automatically. Full per-component instructions follow.
-
-### 1. Backend
+### Backend
 
 ```bash
 cd backend
 python -m venv .venv
 # Windows:  .venv\Scripts\activate      Linux/macOS:  source .venv/bin/activate
 pip install -r requirements.txt
-cp ../.env.example .env        # optional — sensible defaults exist
 uvicorn app.main:app --reload --port 8000
 ```
 
-- API docs: http://127.0.0.1:8000/docs
-- Health: http://127.0.0.1:8000/api/health
-- On first start the backend **creates tables automatically** and, unless disabled, seeds 45 clearly-labeled synthetic demo reports so the dashboard is not empty. Set `SEED_DEMO_DATA=0` (e.g. `backend/.env`) to keep the database empty and verify with your own imported data.
-- **Data you import is saved in PostgreSQL and survives backend restarts** — nothing is cleared or re-seeded at startup when seeding is disabled (the log line `Demo seeding disabled — database stays empty for real data` confirms it).
+- API docs: http://127.0.0.1:8000/docs · Health: http://127.0.0.1:8000/api/health
+- On first start the backend creates the schema automatically and seeds only the ten **Life-Saving-Rule taxonomy** rows. **Demo reports are intentionally not seeded** in this build (`backend/app/data/seed.py`) — the database starts empty and stays empty until you import your own data.
+- Default storage is a local **SQLite file** (`backend/sif_detection.db`) so the demo runs with zero setup.
 
-#### Using PostgreSQL (the real database flow)
-
-The default `DATABASE_URL` is a local SQLite file so the demo runs with zero setup. To use **PostgreSQL**:
+#### Optional: PostgreSQL (the real database flow)
 
 ```bash
 docker compose up -d                       # starts sif-postgres on :5432 (repo root)
 pip install "psycopg[binary]" openpyxl     # PostgreSQL driver + XLSX ingestion
-# .env:  DATABASE_URL=postgresql+psycopg://sif:sif@localhost:5432/sif_detection
-uvicorn app.main:app --reload --port 8000  # creates schema + seeds demo data in Postgres
+# backend/.env:  DATABASE_URL=postgresql+psycopg://sif:sif@localhost:5432/sif_detection
+uvicorn app.main:app --reload --port 8000  # creates the same schema in Postgres
 ```
 
-### 2. Frontend
+The same code path runs against either engine — `/api/health` reports which one is active, and the app footer shows it truthfully.
+
+### Frontend
 
 ```bash
 cd frontend
@@ -238,47 +195,57 @@ npm run dev        # http://127.0.0.1:3000
 
 The frontend reads `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8000`).
 
-> Appearance: use the **moon / sun button** in the header to switch between dark and light mode. The choice is remembered in the browser; the first visit follows the operating-system preference.
+> Appearance: use the **sun / moon toggle** in the sidebar footer (or the mobile top bar) to switch between light and dark mode. The choice is remembered in the browser; the first visit follows the operating-system preference.
 
-### 3. Viewing the demo
+### Viewing the documentation
 
 ```bash
-# Documentation — just open in a browser:
-open docs/index.html             # project showcase
-open docs/processing.html        # how data is processed + per-field algorithms
+# Just open in a browser:
+open docs/index.html             # showcase — flows, outputs, architecture
+open docs/processing.html        # how data is processed + which algorithm decides each field
 ```
+
+## Documentation map
+
+The three documents are scoped so nothing is duplicated:
+
+| Document | Scope |
+|---|---|
+| **README.md** (this file) | Run book — problem, feature set, setup, environment, API, evaluation, limitations |
+| **docs/index.html** | Showcase — what the product does, the two user flows, mock outputs, dashboard, architecture |
+| **docs/processing.html** | Deep dive — the 9-stage processing pipeline and a field-by-field table of the algorithm that decides each output |
 
 ## Environment Variables (`.env.example`)
 
 | Variable | Required | Purpose |
 |---|---|---|
 | `GROQ_API_KEY` | No | Optional LLM refinement (Llama via Groq). Without it, rule-based analysis runs. |
-| `SEED_DEMO_DATA` | No | `1` (default) seeds 45 synthetic demo reports when the DB is empty; `0` keeps it empty for real imports. |
-| `DATABASE_URL` | No | PostgreSQL URL for the local Docker database. Defaults to local SQLite (`sqlite:///./sif_detection.db`) when unset. |
-| `NEXT_PUBLIC_API_URL` | No | Frontend → backend base URL. |
+| `DATABASE_URL` | No | PostgreSQL URL (local Docker or Supabase). Defaults to local SQLite (`sqlite:///./sif_detection.db`) when unset. |
+| `NEXT_PUBLIC_API_URL` | No | Frontend → backend base URL. Defaults to `http://localhost:8000`. |
+| `SEED_DEMO_DATA` | No | Accepted for compatibility but **currently ignored**: demo seeding is disabled in code so the database always contains only imported data. |
 
 Never commit real credentials. Never commit a `.env` file.
 
 ## Ingesting Your Own Dataset (any format)
 
-The platform is **dataset-agnostic** — it analyzes any safety-report dataset, not just the synthetic demo. The full flow is:
+The platform is **dataset-agnostic** — it analyzes any safety-report dataset, not just a fixed schema. The full flow:
 
 ```
-Dataset file (CSV / Excel / JSON, any columns)
-        ↓  auto-detect column mapping
+Dataset file (CSV / Excel / JSON / TSV / TXT, any columns)
+        ↓  auto-detect column mapping (synonym-scored, preview first)
 Preview: which column is the report text / date / site / activity?
         ↓  (adjust mapping if needed)
-Each row → mapped to report fields → SIF pipeline (detect → evidence →
-         hazard → barrier → rule → priority)
+Each row → normalized → duplicate fingerprint → SIF pipeline
+         (detect → evidence → hazard → barrier → rule → priority)
         ↓
-PostgreSQL: report + analysis stored (source label kept)
+Database: report + analysis stored (source label kept) — progress visible
         ↓
 Dashboard, sites, activities, barriers & patterns update automatically
         ↓
-HSE review of any flagged report
+HSE review of any flagged report → labeled example → retraining
 ```
 
-Try it in the UI: **Import Data** page (top nav) or directly via the API:
+Import from the **Import Data** page (left sidebar) or directly via the API:
 
 ```bash
 # Preview without writing anything
@@ -297,39 +264,45 @@ curl -X POST http://127.0.0.1:8000/api/ingest/rows -H "Content-Type: application
   -d '{"rows": [{"Description": "Welder did hot work without a gas test.", "Location": "Plant B"}]}'
 ```
 
-Column synonyms are auto-detected (e.g. *Report / Description / Narrative / Observation / What happened* → text; *Site / Location / Plant / Area / Work location* → site; *Date of occurrence / Reported on* → date; *Activity / Nature of work / Type of job* → activity; *Type / Category* → report type). Dates are parsed across common formats. Rows with no explicit metadata are still fully analyzed from free text — nothing requires the demo schema.
+Column synonyms are auto-detected (e.g. *Report / Description / Narrative / Observation / What happened* → text; *Site / Location / Plant / Area / Work location* → site; *Date of occurrence / Reported on* → date; *Activity / Nature of work / Type of job* → activity; *Type / Category* → report type). Dates are parsed across common formats. Rows with no explicit metadata are still fully analyzed from free text — nothing requires a particular schema.
 
 `backend/scripts/verify_ingest.py` runs the whole flow against a deliberately foreign-format CSV.
 
-## Demo Data
+## Datasets in the repository
 
-All demo reports in `backend/app/data/demo_reports.py` are **synthetic, invented scenarios** labeled `Demo / Synthetic Data` in the UI. They cover Energy Isolation, Confined Space, Hot Work, Working at Height, Line of Fire, Lifting, Driving, Electrical and Bypassing Safety Controls — with deliberately recurring patterns (e.g. energy-isolation failures during maintenance, missing gas testing before confined-space entry) so the analytics and pattern pages have meaningful data to show.
+| File | Rows | Used for |
+|---|---|---|
+| `backend/app/data/demo_reports.py` | 45 synthetic, invented reports | Offline scripts only (`scripts/verify_engine.py`, `scripts/generate_dataset.py`). **Not seeded at startup** in this build — the running database stays empty until you import. |
+| `backend/app/data/golden_set.py` | 35 hand-labelled reports (EN / HI / BN / AS) | Deterministic engine benchmark — SIF + per-rule precision / recall / F1 (see Evaluation). |
+| `backend/app/data/oil_hsse_sif_dataset.csv` | 500 labelled SIF reports | Statistical ML benchmark — stratified 5-fold CV of Naive Bayes / Logistic Regression / Linear SVM vs the rule baseline. |
 
 ## API Overview
 
 ```
-GET    /api/health
-POST   /api/reports/analyze        # analyze (store=true/false)
-POST   /api/reports                # create + analyze + store
-GET    /api/reports                # list (filters: site, activity, priority, rule, status, sif, q)
-GET    /api/reports/counts         # quick counts: total / pending / verified / rejected / failed
-GET    /api/reports/{id}           # full detail incl. analysis + review + possible duplicate
-POST   /api/reports/{id}/reanalyze # re-run pipeline, update stored analysis
-PATCH  /api/reports/{id}/review    # HSE review decision
-POST   /api/ingest/file/preview    # upload dataset, preview mapping (no writes)
-POST   /api/ingest/file            # start import job for an uploaded file
-POST   /api/ingest/rows            # start import job for raw JSON rows
-GET    /api/ingest/jobs/{id}       # poll job progress (persisted in the DB)
-GET    /api/ingest/jobs            # recent import jobs
-GET    /api/analytics/overview     # KPIs + trend + recent high-priority
+GET    /api/health                  # status + active database engine
+POST   /api/reports/analyze         # analyze (store=true/false)
+POST   /api/reports                 # create + analyze + store
+GET    /api/reports                 # list (filters: site, activity, priority, rule,
+                                    #   status, sif, q, source, hazard, barrier)
+GET    /api/reports/counts          # quick counts: total / pending / verified / rejected / failed
+GET    /api/reports/{id}            # full detail incl. analysis + review + similar + duplicate_of
+POST   /api/reports/{id}/reanalyze  # re-run pipeline, update stored analysis
+PATCH  /api/reports/{id}/review     # HSE review decision
+POST   /api/ingest/file/preview     # upload dataset, preview mapping (no writes)
+POST   /api/ingest/file             # start import job for an uploaded file
+POST   /api/ingest/rows             # start import job for raw JSON rows
+GET    /api/ingest/jobs/{id}        # poll job progress (persisted in the DB)
+GET    /api/ingest/jobs             # recent import jobs
+GET    /api/analytics/overview      # KPIs + trend + recent high-priority
 GET    /api/analytics/life-saving-rules
 GET    /api/analytics/sites
 GET    /api/analytics/activities
 GET    /api/analytics/barriers
 GET    /api/analytics/patterns
-GET    /api/evaluation          # golden-set SIF + per-Life-Saving-Rule metrics
-GET    /api/feedback/summary    # reviewed-label counts + latest training run
-POST   /api/feedback/train      # train on reviewed labels (metrics + learned signals)
+GET    /api/evaluation              # golden-set metrics + k-fold stability + ML CV payload
+GET|POST /api/model/evaluate        # run the stratified 5-fold ML benchmark
+GET    /api/feedback/summary        # reviewed-label counts + latest training run
+POST   /api/feedback/train          # train on reviewed labels (metrics + learned signals)
 ```
 
 Example:
@@ -365,30 +338,33 @@ curl -X POST http://127.0.0.1:8000/api/reports/analyze -H "Content-Type: applica
 # => life_saving_rule: "Confined Space Entry", languages: ["en", "hi-latn"], evidence: ["bina gas test"]
 ```
 
-Also handles Devanagari (`गैस टेस्ट के बिना`), Bengali (`গ্যাস টেস্ট করা হয়নি`, roman “gas test chara”) and Assamese (`গেছ টেষ্ট নকৰাকৈ`) phrases — try the Hindi / Bengali example chips on the Analyze page.
+Also handles Devanagari (`गैस टेस्ट के बिना`), Bengali (`গ্যাস টেস্ট করা হয়নি`, roman "gas test chara") and Assamese (`গেছ টেষ্ট নকৰাকৈ`) phrases — try the Hindi / Bengali example chips on the Analyze page.
 
 ## Evaluation
 
-The platform ships two distinct, complementary evaluation benchmarks on the **Model Evaluation** (`/evaluation`) page:
-
-### 1. Deterministic Golden-Set Engine Benchmark (35 Multi-lingual Cases)
-- **What it is**: A hand-labeled reference set of 35 incident reports in `backend/app/data/golden_set.py` covering all ten Life-Saving Rules across English, Hindi (Devanagari & Hinglish), Bengali, and Assamese.
-- **Purpose**: Tests the **Rule-Based & Multi-Lingual Engine** (deterministic, offline). It verifies that regional phrase patterns and script translations correctly fire specific Life-Saving Rules and detect SIF potential without needing an external LLM.
-
-### 2. Stratified 5-Fold ML Cross-Validation (500 SIF Reports Dataset)
-- **What it is**: A 5-fold cross-validation suite over a 500-report SIF dataset (`backend/app/data/oil_hsse_sif_dataset.csv`).
-- **Purpose**: Evaluates **Statistical Machine Learning Models** (Multinomial Naive Bayes, Logistic Regression, Linear SVM) against a Rule Engine Baseline. It isolates TF-IDF vectorization within each fold to prevent data leakage and measures per-fold Precision, Recall, $F_1$, and safety-critical $F_2$ scores.
-
-> **Key Distinction**: The Golden Set (35 cases) evaluates **rule-based multi-lingual coverage**, while the 5-Fold Cross-Validation (500 reports) evaluates **statistical ML algorithm performance**.
+The **Model Evaluation** page (`/evaluation`) runs two distinct, complementary benchmarks. The CLI reproduces both:
 
 ```bash
 cd backend
-python scripts/evaluate.py --cv 5   # compact + k-fold stability table
+python scripts/evaluate.py --cv 5   # golden-set metrics + stratified k-fold stability table
 python scripts/evaluate.py --json --cv 5
 ```
 
-- `backend/scripts/verify_engine.py` runs detection-agreement checks on the synthetic demo set; `backend/scripts/verify_ingest.py` exercises the generic-dataset ingestion flow.
-- **Human agreement** — reviewed reports become labeled examples; `POST /api/feedback/train` (or the *Train on reviewed labels* button on the Reports page) recomputes AI↔HSE agreement and mined signals. The same k-fold seams become train/test splits for the adaptive signals once enough reviewed feedback accumulates.
+### 1. Deterministic Golden-Set Engine Benchmark (35 multilingual cases)
+
+- A hand-labelled reference set of 35 incident reports (`backend/app/data/golden_set.py`) covering all ten Life-Saving Rules across English, Hindi (Devanagari & Hinglish), Bengali and Assamese.
+- Verifies the **rule-based + multilingual engine** (deterministic, offline): regional phrase patterns and script translations fire the right rules and detect SIF potential without any external LLM.
+- Current results: SIF precision / recall / F1 = **1.000**, multilingual cases **19/19**, runtime ≈ **20 ms**.
+- A **stratified 5-fold stability check** (folds dealt by SIF label × language) reports mean ± std and a 95% CI over fold compositions, so the numbers are checked for stability — not a single lucky split.
+
+### 2. Stratified 5-Fold ML Cross-Validation (500-report dataset)
+
+- A stratified 5-fold CV suite over `backend/app/data/oil_hsse_sif_dataset.csv` (500 reports).
+- Evaluates **statistical models** — Multinomial Naive Bayes, Logistic Regression, Linear SVM — against the **rule-engine baseline**, isolating TF-IDF vectorization inside each fold to prevent data leakage and reporting per-fold precision, recall, F1 and safety-critical **F2**, plus a decision-threshold sensitivity analysis. Served by `GET/POST /api/model/evaluate`.
+
+> **Key distinction:** the golden set (35 cases) evaluates rule-based multilingual coverage; the 5-fold CV (500 reports) evaluates statistical ML algorithm performance.
+
+- **Human agreement** — reviewed reports become labeled examples; `POST /api/feedback/train` (or the *Train on reviewed labels* button) recomputes AI↔HSE agreement and mined signals. The same k-fold seams become train/test splits for the adaptive signals once enough reviewed feedback accumulates.
 - Recall matters most: missing a genuine SIF precursor is more serious than an extra false alert. **No claim of accuracy on real OIL data is made** — metrics describe the deterministic rules on the in-repo reference set and require HSE-validated labels to generalize.
 
 ### Validating with real data (TSTR roadmap)
@@ -403,7 +379,7 @@ The golden set was authored against the same rule lexicon, so perfect scores the
 
 ## Limitations
 
-- Demo data is synthetic; the model is **not** trained on OIL data.
+- Data in the repository is synthetic; the model is **not** trained on OIL data.
 - Multilingual phrases cover the vocabulary in `services/multilingual.py` — field reporting constantly adds new slang, so HSE review + the feedback loop keep coverage honest and growing.
 - Learned signals tune confidence/evidence but never flip a verdict on their own.
 - Priority scoring is an **AI-assisted prototype assessment**, not official OIL methodology.

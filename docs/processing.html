@@ -167,7 +167,7 @@
       <tr><td><b>similarity score</b> (with past reports)</td><td>Hybrid: normalized token overlap of the texts plus shared-concept bonuses for the same rule / hazard / barrier / activity (bonuses capped low so genuine near-copies outscore distinct-but-related precursors). Reported with the shared fields so an HSE reviewer can see why two reports are linked.</td><td><code>similarity.py</code></td></tr>
       <tr><td><b>duplicate / duplicate_of</b></td><td>Exact duplicates are prevented at import by the text fingerprint; stored near-copies at similarity ≥ 0.88 are flagged <code>duplicate_of</code> with a compare link (threshold constant <code>DUP_SIMILARITY</code>).</td><td><code>ingest.py</code>, <code>api/reports.py</code></td></tr>
       <tr><td><b>review status</b></td><td>Human decision state per report — pending by default, then HSE verified / rejected / edited. Feedbacks are stored as labeled examples for retraining.</td><td><code>api/review.py</code></td></tr>
-      <tr><td><b>aggregate fields</b> (trend, density, patterns)</td><td>Weekly buckets of analyzed reports; SIF precursor density = SIF-potential reports ÷ total reports; recurring patterns group ≥ 2 SIF-potential reports by rule+activity / rule+barrier / hazard+activity, always backed by the real member reports.</td><td><code>services/analytics.py</code></td></tr>
+      <tr><td><b>aggregate fields</b> (trend, density, patterns)</td><td>Weekly buckets of analyzed reports; SIF precursor density = SIF-potential reports ÷ total reports; recurring patterns group ≥ 2 SIF-potential reports by rule+activity / rule+barrier / hazard+activity, always backed by the real member reports.</td><td><code>api/analytics.py</code></td></tr>
     </table>
     <p class="note">Structured file values used "as-is" replace the text-extraction value in the stored record; the AI-extracted value is retained inside the record for reference and never silently merged.</p>
   </div>
@@ -220,7 +220,7 @@ sif_density (weekly) = SIF-potential reports / total reports in that week</div>
       <h2>Measured, then <span class="hl">improved by HSE labels</span></h2>
     </div>
     <div class="grid-2">
-      <div class="card"><h3>Deterministic benchmark</h3><p>A hand-labeled golden set of 35 reports (English, Hindi, Bengali, Assamese) is scored per class and per Life-Saving Rule with precision / recall / F1 plus a confusion matrix. Runs in milliseconds with no external model. The same set also feeds a <b>stratified 5-fold stability check</b>: folds are dealt round-robin by SIF label x language, and the UI reports mean ± std with a 95% confidence interval — so the metrics are checked for stability across case compositions, not a single lucky split.</p></div>
+      <div class="card"><h3>Deterministic benchmark</h3><p>A hand-labeled golden set of 35 reports (English, Hindi, Bengali, Assamese) is scored per class and per Life-Saving Rule with precision / recall / F1 plus a confusion matrix. Runs in milliseconds with no external model. The same set also feeds a <b>stratified 5-fold stability check</b>: folds are dealt round-robin by SIF label x language, and the UI reports mean ± std with a 95% confidence interval — so the metrics are checked for stability across case compositions, not a single lucky split.</p><p class="note">A second, statistical benchmark runs from the same Evaluation page: stratified 5-fold cross-validation over a 500-report dataset (Multinomial Naive Bayes / Logistic Regression / Linear SVM vs the rule-engine baseline, F2-weighted, TF-IDF fit inside each fold). Results served by <code>/api/model/evaluate</code>.</p></div>
       <div class="card"><h3>Feedback-to-retraining loop</h3><p>Each HSE review (verify / reject / edit) becomes a labeled example. The "Train on reviewed labels" pass recomputes model-to-human agreement, mines the surface phrases behind disagreements, and applies them as weighted learned signals to later analyses — tagged <code>rules-v1+tuned</code> and flagged for review. A learned keyword alone never flips a verdict; rules and human review stay in control.</p><p class="note">Roadmap for real data: train-on-synthetic-test-on-real (TSTR), distribution fidelity checks (KS / chi-square), and a real-vs-synthetic discriminator once an HSE-labeled real dataset exists.</p></div>
     </div>
   </div>
@@ -234,6 +234,7 @@ sif_density (weekly) = SIF-potential reports / total reports in that week</div>
   <p style="font-size:12px">Prototype · AI-assisted · Requires HSE/OIL validation</p>
   <div class="footlinks">
     <a href="index.html">Project showcase</a>
+    <a href="../README.md">README (run book)</a>
     <a href="processing.html">How data is processed</a>
     <a href="http://127.0.0.1:3000" target="_blank" rel="noopener">Open the live app</a>
   </div>
