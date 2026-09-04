@@ -27,6 +27,15 @@ venv/
 *.sqlite
 *.sqlite3
 
+# --- Generated large datasets (real-data pipeline) ---
+# Raw source files stay read-only under docs/Real datasets/.  Everything the
+# pipeline WRITES lives under data/processed/ — the big CSVs and intermediate
+# caches are generated and gitignored; the small reports/ markdown is kept.
+data/processed/_cache/
+data/processed/train.csv
+data/processed/validation.csv
+data/processed/test.csv
+
 # --- Misc ---
 .DS_Store
 Thumbs.db

@@ -48,7 +48,6 @@ const insightLinks = [
   { href: "/sites", label: "Site Risk", icon: MapPin },
   { href: "/activities", label: "Activities", icon: HardHat },
   { href: "/barriers", label: "Barrier Failures", icon: BarChart3 },
-  { href: "/evaluation", label: "Model Evaluation", icon: FlaskConical },
 ];
 
 type Counts = { ok: boolean; total?: number; pending?: number };

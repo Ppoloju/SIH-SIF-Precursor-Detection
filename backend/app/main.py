@@ -53,6 +53,14 @@ async def lifespan(app: FastAPI):
         logger.warning("Startup seeding/signals skipped (%s). The API will still run.", exc)
     finally:
         db.close()
+    # Best-effort preload of the real-time ML imputation model (training split
+    # only) so the first analyze/ingest call is already fast. Never fatal.
+    try:
+        from app.services import ml_inference
+
+        ml_inference.status()
+    except Exception as exc:  # noqa: BLE001
+        logger.info("ML imputation model not preloaded (%s) — will lazy-load.", exc)
     yield
 
 

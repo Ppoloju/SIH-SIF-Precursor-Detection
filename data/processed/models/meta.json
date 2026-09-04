@@ -1,0 +1,23 @@
+{
+  "loaded": true,
+  "trained_at": "2026-09-04 20:18:38 UTC",
+  "train_rows": 6585,
+  "train_sif_positive": 1012,
+  "model_path": "data\\processed\\models\\sif_imputer.joblib",
+  "fields": {
+    "sif": "binary probability",
+    "lsr": {
+      "classes": 10
+    },
+    "hazard": {
+      "classes": 15
+    },
+    "activity": {
+      "classes": 20
+    },
+    "equipment": {
+      "terms": 15
+    }
+  },
+  "learns_from": "data/processed/train.csv (training split only; validation/test never read)"
+}

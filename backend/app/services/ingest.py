@@ -36,6 +36,7 @@ from sqlalchemy.orm import Session
 from app.models.db import SessionLocal
 from app.models.entities import Analysis, IngestJob, Report
 from app.services.analysis_pipeline import analyze_report
+from app.services import ml_inference
 
 logger = logging.getLogger(__name__)
 
@@ -568,6 +569,11 @@ def _import_one_row(
 
     try:
         result = analyze_report(text, use_llm=use_llm)
+        # Real-time ML layer: fill fields the engine left empty (best-effort).
+        try:
+            result = ml_inference.refine(result, text)
+        except Exception:  # noqa: BLE001 — ML layer never breaks an import
+            pass
     except Exception as exc:  # noqa: BLE001 — row-level isolation
         report.processing_status = "failed"
         return {"ok": False, "skipped": False, "error": f"{type(exc).__name__}: {exc}"[:400],

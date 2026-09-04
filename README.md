@@ -275,6 +275,70 @@ Column synonyms are auto-detected (e.g. *Report / Description / Narrative / Obse
 | `backend/app/data/demo_reports.py` | 45 synthetic, invented reports | Offline scripts only (`scripts/verify_engine.py`, `scripts/generate_dataset.py`). **Not seeded at startup** in this build — the running database stays empty until you import. |
 | `backend/app/data/golden_set.py` | 35 hand-labelled reports (EN / HI / BN / AS) | Deterministic engine benchmark — SIF + per-rule precision / recall / F1 (see Evaluation). |
 | `backend/app/data/oil_hsse_sif_dataset.csv` | 500 labelled SIF reports | Statistical ML benchmark — stratified 5-fold CV of Naive Bayes / Logistic Regression / Linear SVM vs the rule baseline. |
+| `docs/Real datasets/` (4 sources, ~2.1 M rows) | 608,934 incidents with non-empty descriptions | Read-only raw files — MSHA accidents, OSHA summaries, OSHA fatality narratives, BSEE offshore incidents. Never modified. |
+| `data/processed/{train,validation,test}.csv` | 6,585 / 2,192 / 2,192 real incidents | Generated 60/20/20 split (seed 42) of the real-data pipeline. Gitignored (generated). |
+| `docs/Synthetic dataset/{train,validation,test}.csv` | 1,204 / 398 / 398 synthetic incidents | GAN-style augmentation of the real data for model comparison (see below). |
+
+## Real-data pipeline (docs/Real datasets -> data/processed)
+
+`backend/scripts/build_real_dataset.py` turns the ~2.1 M raw rows under
+`docs/Real datasets/` (read-only) into a canonical, labelled dataset. It is a
+pipeline, not a second SIF engine: every output field is computed by the same
+`analysis_pipeline.analyze_report` (no LLM) the web app uses.
+
+**Sources and mapping (details: `data/processed/reports/column_mapping.md`):**
+
+| Source | Description column | Notes |
+|---|---|---|
+| OSHA Dataset 1 (MSHA, 59 cols) | `AI_NARR` | 274,565 of 740,390 rows have a narrative; rich structured fields (severity, activity, equipment) map to canonical inputs |
+| OSHA Dataset 2 (summaries) | `EVENT_DESC` | `ABSTRACT_TEXT` is empty on every row; `EVENT_DESC` is populated for all 165,799 |
+| OSHA abstract set 3 | `ABSTRACT_TEXT` grouped by `SUMMARY_NR`, sorted by `LINE_NR` | 1,151,160 line rows reconstruct into 165,794 narratives (164,615 multi-line) |
+| BSEE cy-2021/2023/2024 xlsx | `Incident Summary` | `compressed_*` files duplicate the uncompressed sheets and are skipped |
+
+**Rules enforced:** original files are never written; canonical inputs are left
+empty when a source lacks them (never fabricated); the UA/UC/Near-miss taxonomy
+is not in these sources so `report_type` carries the true source label; derived
+heuristics (e.g. BSEE `actual_severity` from fatality/injury counts) are flagged
+in the `inferred_fields` column; the split groups by `incident_id` (fragments of
+one event never cross splits), stratifies on `sif_potential`, and runs before
+any scaler/encoder fit. The test split is never touched by training or tuning.
+
+**Phases (cached in `data/processed/_cache/`, gitignored):**
+
+```bash
+cd backend
+./.venv/Scripts/python.exe scripts/build_real_dataset.py --phase extract  # deliverable 1: column mapping + data quality report
+./.venv/Scripts/python.exe scripts/build_real_dataset.py --phase analyze   # ~11 k candidates through the engine (~30 s)
+./.venv/Scripts/python.exe scripts/build_real_dataset.py --phase split     # 60/20/20 grouped + stratified splits
+```
+
+**Deliverable 1 reports** (written before any split):
+
+- `data/processed/reports/column_mapping.md` — every canonical field, its source column(s), original vs derived vs empty
+- `data/processed/reports/data_quality_report.md` — row counts, reconstructed-abstract counts, length distributions, missingness
+- `data/processed/reports/data_dictionary.md` — full field dictionary, missingness handling, original vs inferred
+- `data/processed/reports/model_comparison.md` — classifier comparison (below)
+
+**Model comparison (5-fold CV on the training set — see the report for the
+honest caveat that the rule baseline's 1.0 is self-consistency on its own
+labels, while the classical models show true generalization on unseen text):**
+
+| model | real F1 (mean ± std) | synthetic F1 |
+|---|---|---|
+| Rule-based engine (ours) | 1.0 ± 0.0 (self-consistency) | 1.0 (self-consistency) |
+| Logistic Regression | 0.581 ± 0.008 | 0.769 ± 0.016 |
+| Linear SVM | 0.589 ± 0.015 | 0.786 ± 0.016 |
+| Decision Tree | 0.505 ± 0.014 | 0.715 ± 0.016 |
+| LDA + PCA | 0.496 ± 0.031 | 0.769 ± 0.024 |
+
+Re-run: `./.venv/Scripts/python.exe scripts/compare_classifiers.py --splits data/processed/train.csv "../docs/Synthetic dataset/train.csv"`
+
+**Synthetic dataset (`docs/Synthetic dataset/`):** a GAN-style duplication of the
+real data — every row starts from a real incident and gets 1-3 conservative
+mutations (number perturbation, real-vocabulary swaps, control clauses,
+crossover); labels are engine-computed, never hand-invented. See its `README.md`
+for the honest limitation (deterministic stand-in for a true GAN; a CTGAN / text
+GAN training run is future work).
 
 ## API Overview
 

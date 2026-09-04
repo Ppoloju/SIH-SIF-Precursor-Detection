@@ -16,6 +16,20 @@ from app.schemas.reports import (
     ReportOut,
 )
 from app.services.analysis_pipeline import analyze_report
+from app.services import ml_inference
+
+
+def _refine_with_ml(result: dict, text: str) -> dict:
+    """Real-time ML layer: fill structured fields the engine left empty.
+
+    Runs after the deterministic pipeline on every analyze/create call. Never
+    breaks analysis when the model is unavailable, never overwrites engine
+    values, never flips the SIF verdict.
+    """
+    try:
+        return ml_inference.refine(result, text)
+    except Exception:  # noqa: BLE001 — ML layer is best-effort
+        return result
 from app.services.similarity import find_similar
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -133,6 +147,7 @@ def analyze(
     returned (useful for live preview).
     """
     result = analyze_report(payload.report_text, use_llm=True)
+    result = _refine_with_ml(result, payload.report_text)
 
     if not payload.store:
         return {
@@ -165,6 +180,7 @@ def create_report(
     db: Session = Depends(get_db),
 ):
     result = analyze_report(payload.report_text, use_llm=True)
+    result = _refine_with_ml(result, payload.report_text)
     report = Report(
         report_id=_next_report_id(db),
         report_text=payload.report_text,
