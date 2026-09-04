@@ -33,6 +33,9 @@ import {
   Legend,
   Line,
   LineChart,
+  Pie,
+  PieChart,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -127,6 +130,8 @@ export default function DashboardPage() {
   const [chartMetric, setChartMetric] = useState<"counts" | "density">(
     "counts"
   );
+  const [trendWindow, setTrendWindow] = useState<4 | 8>(8);
+  const [activeRule, setActiveRule] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,23 +180,31 @@ export default function DashboardPage() {
       trend.map((t) => ({
         ...t,
         density:
-          t.count > 0 ? Math.round((100 * (t.sif_count ?? 0)) / t.count) : 0,
+          t.count > 0 ? Math.round((1000 * (t.sif_count ?? 0)) / t.count) / 10 : 0,
       })),
     [trend]
+  );
+  const visibleTrend = useMemo(
+    () => trend.slice(-trendWindow),
+    [trend, trendWindow]
+  );
+  const visibleDensityTrend = useMemo(
+    () => densityTrend.slice(-trendWindow),
+    [densityTrend, trendWindow]
   );
   const densityMode = chartMetric === "density";
 
   // Real week-over-week deltas from the last two periods of the trend.
   const deltas = useMemo(() => {
-    if (trend.length < 2) return null;
-    const last = trend[trend.length - 1];
-    const prev = trend[trend.length - 2];
+    if (visibleTrend.length < 2) return null;
+    const last = visibleTrend[visibleTrend.length - 1];
+    const prev = visibleTrend[visibleTrend.length - 2];
     return {
       lastPeriod: last.period,
       total: { cur: last.count, prev: prev.count },
       sif: { cur: last.sif_count, prev: prev.sif_count },
     };
-  }, [trend]);
+  }, [visibleTrend]);
 
   const topSite = useMemo(
     () =>
@@ -496,6 +509,27 @@ export default function DashboardPage() {
               Trend
             </h2>
             <div className="flex flex-wrap items-center gap-1.5">
+              <div
+                className="flex items-center gap-0.5 rounded-lg border border-brand-200 bg-brand-50/60 p-0.5"
+                role="group"
+                aria-label="Trend time range"
+              >
+                {([4, 8] as const).map((windowSize) => (
+                  <button
+                    key={windowSize}
+                    onClick={() => setTrendWindow(windowSize)}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
+                      trendWindow === windowSize
+                        ? "bg-white text-brand-700 shadow-sm"
+                        : "text-ink-muted hover:text-brand-600"
+                    }`}
+                    aria-pressed={trendWindow === windowSize}
+                    title={`Show the last ${windowSize} weeks`}
+                  >
+                    {windowSize}W
+                  </button>
+                ))}
+              </div>
               {/* Metric toggle — counts or SIF density % (same underlying data) */}
               <div
                 className="flex items-center gap-0.5 rounded-lg border border-brand-200 bg-brand-50/60 p-0.5"
@@ -570,7 +604,7 @@ export default function DashboardPage() {
           <div className="mt-4 h-60 sm:h-64">
             <ResponsiveContainer width="100%" height="100%">
               {chartKind === "area" ? (
-                <AreaChart data={densityMode ? densityTrend : trend}>
+                <AreaChart data={densityMode ? visibleDensityTrend : visibleTrend}>
                   <defs>
                     <linearGradient id="sifFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={C.sif} stopOpacity={0.32} />
@@ -622,7 +656,7 @@ export default function DashboardPage() {
                   )}
                 </AreaChart>
               ) : chartKind === "line" ? (
-                <LineChart data={densityMode ? densityTrend : trend}>
+                <LineChart data={densityMode ? visibleDensityTrend : visibleTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
@@ -661,7 +695,7 @@ export default function DashboardPage() {
                   )}
                 </LineChart>
               ) : chartKind === "composed" ? (
-                <ComposedChart data={densityMode ? densityTrend : trend} barGap={2}>
+                <ComposedChart data={densityMode ? visibleDensityTrend : visibleTrend} barGap={2}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
@@ -685,7 +719,7 @@ export default function DashboardPage() {
                   )}
                 </ComposedChart>
               ) : (
-                <BarChart data={densityMode ? densityTrend : trend} barGap={2}>
+                <BarChart data={densityMode ? visibleDensityTrend : visibleTrend} barGap={2}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
@@ -715,39 +749,84 @@ export default function DashboardPage() {
         </div>
 
         <div className="card lg:col-span-2">
-          <h2 className="card-title">
-            <BarChart3 size={16} className="text-brand-600" /> Life-Saving Rule
-            Distribution
-          </h2>
-          <div className="mt-4 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={rules} layout="vertical" margin={{ left: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.grid} horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} />
-                <YAxis
-                  type="category"
-                  dataKey="rule"
-                  width={104}
-                  tick={{ fontSize: 10.5 }}
-                  stroke={C.axis}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip contentStyle={tipStyle} cursor={{ fill: C.barCursor }} />
-                <Bar dataKey="count" name="Reports" fill={C.sif} radius={[0, 6, 6, 0]} barSize={16} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="card-title">
+                <BarChart3 size={16} className="text-brand-600" /> Life-Saving Rule
+                Distribution
+              </h2>
+              <p className="mt-1 text-[11px] text-ink-muted">Select a segment to inspect its share of SIF-potential reports.</p>
+            </div>
+            <LifeSavingRulesLink asLink compact={false} label="Rules" />
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-brand-50 pt-3">
-            <p className="text-[11px] text-ink-muted">
-              Rule taxonomy is configurable and requires HSE/OIL validation.
-            </p>
-            <LifeSavingRulesLink
-              asLink
-              compact={false}
-              label="What are these rules?"
-            />
+          <div className="mt-3 grid items-center gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(150px,0.9fr)]">
+            <div className="h-56 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={rules}
+                    dataKey="count"
+                    nameKey="rule"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="52%"
+                    outerRadius="78%"
+                    paddingAngle={2}
+                    onClick={(entry) => setActiveRule(String(entry.payload?.rule ?? ""))}
+                    onMouseEnter={(entry) => setActiveRule(String(entry.payload?.rule ?? ""))}
+                    isAnimationActive
+                  >
+                    {rules.map((entry, index) => (
+                      <Cell
+                        key={entry.rule}
+                        fill={C.pie[index % C.pie.length]}
+                        opacity={activeRule && activeRule !== entry.rule ? 0.38 : 1}
+                        stroke="var(--card-bg)"
+                        strokeWidth={2}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={tipStyle}
+                    formatter={(value, _name, item) => [
+                      `${value} reports (${item.payload.percentage}%)`,
+                      "SIF-potential",
+                    ]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="min-w-0">
+              <div className="mb-2 rounded-lg bg-brand-50/70 px-3 py-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">Selected rule</p>
+                <p className="mt-0.5 truncate text-sm font-extrabold text-ink">
+                  {activeRule ?? "Hover a segment"}
+                </p>
+                <p className="text-[11px] text-ink-muted">
+                  {activeRule ? `${rules.find((rule) => rule.rule === activeRule)?.count ?? 0} reports` : `${rules.length} mapped rules`}
+                </p>
+              </div>
+              <div className="max-h-40 space-y-1 overflow-y-auto pr-1">
+                {rules.map((entry, index) => (
+                  <button
+                    key={entry.rule}
+                    onClick={() => setActiveRule(activeRule === entry.rule ? null : entry.rule)}
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] transition ${
+                      activeRule === entry.rule ? "bg-brand-50 text-brand-700" : "text-ink-muted hover:bg-brand-50/60"
+                    }`}
+                    aria-pressed={activeRule === entry.rule}
+                  >
+                    <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: C.pie[index % C.pie.length] }} />
+                    <span className="min-w-0 flex-1 truncate">{entry.rule}</span>
+                    <span className="font-bold text-ink">{entry.count}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+          <p className="mt-2 border-t border-brand-50 pt-3 text-[11px] text-ink-muted">
+            Percentages are calculated from SIF-potential reports. Rule taxonomy requires HSE/OIL validation.
+          </p>
         </div>
       </div>
 

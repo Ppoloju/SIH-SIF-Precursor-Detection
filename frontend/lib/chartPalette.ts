@@ -11,6 +11,8 @@ export interface ChartPalette {
   all: string;
   /** vertical-bar cursor fill */
   barCursor: string;
+  /** Life-Saving Rule pie-chart segments */
+  pie: string[];
 }
 
 export function chartPalette(mode: "light" | "dark"): ChartPalette {
@@ -22,6 +24,7 @@ export function chartPalette(mode: "light" | "dark"): ChartPalette {
         sif: "#a3c6ec",
         all: "#4d6b93",
         barCursor: "#16233c",
+        pie: ["#a3c6ec", "#d89b72", "#9ac9a8", "#c4a7e7", "#e4c77b", "#76c4c7"],
       }
     : {
         grid: "#e4ebf4",
@@ -30,5 +33,6 @@ export function chartPalette(mode: "light" | "dark"): ChartPalette {
         sif: "#2e5f94",
         all: "#98bade",
         barCursor: "#eef4fb",
+        pie: ["#2e5f94", "#b8663d", "#438a60", "#8064a8", "#b68a1a", "#247f82"],
       };
 }

@@ -183,13 +183,13 @@ export default function Nav() {
   return (
     <>
       {/* ---- Desktop: fixed left rail ---- */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-brand-100 bg-white lg:flex">
+      <aside className="nav-surface fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r lg:flex">
         <BrandLink />
         {sections}
       </aside>
 
       {/* ---- Mobile: compact top bar ---- */}
-      <header className="sticky top-0 z-40 border-b border-brand-100 bg-white/90 backdrop-blur lg:hidden">
+      <header className="nav-surface sticky top-0 z-40 border-b backdrop-blur lg:hidden">
         <div className="flex h-14 items-center justify-between gap-3 px-4">
           <BrandLink compact />
           <div className="flex items-center gap-2">
@@ -225,7 +225,7 @@ export default function Nav() {
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 flex w-[19rem] max-w-[85vw] flex-col bg-white shadow-2xl">
+          <div className="nav-surface absolute inset-y-0 left-0 flex w-[19rem] max-w-[85vw] flex-col shadow-2xl">
             <div className="flex items-center justify-between border-b border-brand-100 px-4 py-3">
               <BrandLink compact />
               <button

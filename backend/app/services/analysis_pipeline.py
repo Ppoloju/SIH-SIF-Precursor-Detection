@@ -118,7 +118,7 @@ def analyze_report(text: str, use_llm: bool = True) -> dict:
 
     try:
         risk = risk_scorer.assess(matches, text)
-        primary_rule, rule_confidence = rule_classifier.classify_rule(matches)
+        primary_rule, rule_confidence = rule_classifier.classify_rule(matches, text)
     except Exception as e:
         raise ValueError(f"Risk assessment failed: {str(e)}")
 
@@ -140,6 +140,11 @@ def analyze_report(text: str, use_llm: bool = True) -> dict:
     # from the text when the context makes them clear — always flagged as
     # inferred in the explanation rather than silently invented.
     inferred: dict[str, str] = {}
+    fallback_rule = not matches and primary_rule is not None
+    if fallback_rule:
+        inferred["life_saving_rule"] = (
+            f"selected by low-confidence lexical matching ({rule_confidence:.2f})"
+        )
     activity = info["activity"]
     if not activity and primary_rule:
         from app.services.safety_lexicon import RULE_TO_ACTIVITY
@@ -188,6 +193,11 @@ def analyze_report(text: str, use_llm: bool = True) -> dict:
         "llm_refined": False,
         "uncertainty_note": None,
     }
+    if fallback_rule:
+        result["uncertainty_note"] = (
+            "No direct Life-Saving Rule indicator was detected. The displayed rule "
+            "was selected by the low-confidence text-profile fallback and requires HSE review."
+        )
 
     # Narrative layer — deterministic plain-language summary + actions.
     result["summary"] = narrative.build_summary(result, text)

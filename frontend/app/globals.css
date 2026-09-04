@@ -19,6 +19,8 @@
   --pop-shadow: 0 12px 32px -12px rgba(15, 23, 42, 0.18);
   --chart-text: #55647c; /* svg text (axes, legend) */
   --focus-ring: #2e5f94;
+  --nav-bg: #ffffff;
+  --nav-line: #dde9f6;
   color-scheme: light;
 }
 
@@ -33,6 +35,8 @@ html.dark {
   --pop-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
   --chart-text: #9aa9bf;
   --focus-ring: #8fb5e2;
+  --nav-bg: #101a2c;
+  --nav-line: #2e456f;
   color-scheme: dark;
 }
 
@@ -228,6 +232,11 @@ summary {
    their own pill styling. Hover transitions are intentionally subtle. */
 a {
   -webkit-tap-highlight-color: transparent;
+}
+
+.nav-surface {
+  background-color: var(--nav-bg);
+  border-color: var(--nav-line);
 }
 
 /* Card rows that link somewhere get a quiet "goes somewhere" cue on hover. */
