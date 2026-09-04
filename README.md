@@ -127,10 +127,18 @@ Everything below runs offline, is deterministic and explainable — the optional
 ## Technology Stack
 
 **Frontend:** Next.js (App Router) · React · Tailwind CSS · Recharts · Lucide React
+
 **Backend:** Python · FastAPI · Pydantic v2 · SQLAlchemy
+
 **AI/NLP:** Rule-based NLP + multilingual lexicons (primary) · Llama via Groq (optional) · scikit-learn / Sentence Transformers (optional, when labeled data/keys available)
+
 **Database:** Local PostgreSQL or SQLite fallback
+<<<<<<< HEAD
 **Docs:** `docs/index.html` project showcase · `docs/processing.html` data-processing stages and the algorithm behind every output field
+=======
+
+**Docs:** standalone `docs/index.html` showcase · `docs/MANUAL_TESTING.md` step-by-step QA checklist
+>>>>>>> 45f8118d6c50a12fdba1e11818f497847069b30b
 
 ## Repository Structure
 

@@ -58,7 +58,7 @@ class AnalysisOut(BaseModel):
     evidence: Optional[list[str]] = None
     rule_conditions: Optional[list[dict[str, Any]]] = None
     modified_fields: Optional[list[dict[str, Any]]] = None
-    priority_factors: dict[str, Any] = {}
+    priority_factors: dict[str, Any] = Field(default_factory=dict)
     explanation: Optional[str] = None
     recommended_follow_up: Optional[str] = None
     summary: Optional[str] = None
@@ -67,6 +67,13 @@ class AnalysisOut(BaseModel):
     uncertainty_note: Optional[str] = None
     model: Optional[str] = None
     created_at: datetime
+
+    @field_validator("priority_factors", mode="before")
+    @classmethod
+    def normalize_priority_factors(cls, v: Any) -> dict[str, Any]:
+        if v is None:
+            return {}
+        return v if isinstance(v, dict) else {"value": v}
 
     model_config = {"from_attributes": True}
 
@@ -140,20 +147,27 @@ class AnalysisResultOut(BaseModel):
     hazard: Optional[str] = None
     hazards: list[str] = []
     potential_consequence: Optional[str] = None
-    barrier_failure: list[str] = []
+    barrier_failure: list[str] = Field(default_factory=list)
     life_saving_rule: Optional[str] = None
     activity: Optional[str] = None
     location: Optional[str] = None
-    equipment: list[str] = []
+    equipment: list[str] = Field(default_factory=list)
     unsafe_type: Optional[str] = None
-    evidence: list[str] = []
-    rule_conditions: list[dict[str, Any]] = []
+    evidence: list[str] = Field(default_factory=list)
+    rule_conditions: list[dict[str, Any]] = Field(default_factory=list)
     explanation: Optional[str] = None
     recommended_follow_up: Optional[str] = None
     summary: Optional[str] = None
-    suggested_actions: list[str] = []
-    languages: list[str] = []
+    suggested_actions: list[str] = Field(default_factory=list)
+    languages: list[str] = Field(default_factory=list)
     model: Optional[str] = None
     llm_refined: bool = False
     uncertainty_note: Optional[str] = None
-    priority_factors: dict[str, Any] = {}
+    priority_factors: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("priority_factors", mode="before")
+    @classmethod
+    def normalize_priority_factors(cls, v: Any) -> dict[str, Any]:
+        if v is None:
+            return {}
+        return v if isinstance(v, dict) else {"value": v}

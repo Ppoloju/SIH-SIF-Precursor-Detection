@@ -18,6 +18,7 @@ from app.models.db import get_db
 from app.models.entities import Analysis, Report
 from app.schemas.reports import ReportDetailOut, ReportOut
 from app.services import similarity
+from app.services.safety_lexicon import RULE_ORDER
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -194,10 +195,17 @@ def life_saving_rules(db: Session = Depends(get_db)):
             .order_by(func.count(Analysis.id).desc())
         ).all()
         
-        sif_total = sum(row.sif_count or 0 for row in rows)
+        counts = {name: {"count": 0, "sif_count": 0} for name in RULE_ORDER}
+        for name, count, sif_count in rows:
+            if name in counts:
+                counts[name] = {"count": count, "sif_count": sif_count or 0}
+
+        sif_total = sum(item["sif_count"] for item in counts.values())
         
         rules = []
-        for name, count, sif_count in rows:
+        for name in RULE_ORDER:
+            count = counts[name]["count"]
+            sif_count = counts[name]["sif_count"]
             rules.append(
                 {
                     "rule": name,

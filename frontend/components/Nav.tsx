@@ -7,6 +7,7 @@ import {
   Activity,
   BarChart3,
   ClipboardCheck,
+  ExternalLink,
   FileText,
   FlaskConical,
   HardHat,
@@ -14,6 +15,7 @@ import {
   MapPin,
   Menu,
   Moon,
+  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   Sun,
@@ -57,6 +59,8 @@ export default function Nav() {
   const [dark, setDark] = useState(false);
   const [counts, setCounts] = useState<Counts>({ ok: false });
 
+  const [loading, setLoading] = useState(false);
+
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
@@ -78,6 +82,21 @@ export default function Nav() {
     } catch {}
     setDark(next);
     window.dispatchEvent(new Event("sif-theme"));
+  };
+
+  const refreshCounts = async () => {
+    setLoading(true);
+    try {
+      const [ov, cnt] = await Promise.all([
+        api.getOverview(),
+        api.getReportCounts(),
+      ]);
+      setCounts({ ok: true, total: ov.total_reports, pending: cnt.pending });
+    } catch {
+      setCounts({ ok: false });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Live badge state: backend up + report totals + pending HSE reviews.
@@ -111,8 +130,7 @@ export default function Nav() {
   }, []);
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
-
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
   const sections = (
     <>
@@ -160,22 +178,42 @@ export default function Nav() {
               </>
             ) : (
               <p className="text-[11px] font-semibold text-ink-muted">
-                Backend offline — start the API
+                Backend offline — start API
               </p>
             )}
           </div>
-          <button
-            onClick={toggleTheme}
-            aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-            title={dark ? "Switch to light mode" : "Switch to dark mode"}
-            className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-brand-200 bg-white text-ink-soft transition hover:bg-brand-50 hover:text-brand-700"
-          >
-            {dark ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={refreshCounts}
+              disabled={loading}
+              aria-label="Refresh connection"
+              title="Refresh connection"
+              className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-brand-200 bg-white text-ink-soft transition hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={loading ? "animate-spin text-brand-600" : ""} />
+            </button>
+            <button
+              onClick={toggleTheme}
+              aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+              title={dark ? "Switch to light mode" : "Switch to dark mode"}
+              className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-brand-200 bg-white text-ink-soft transition hover:bg-brand-50 hover:text-brand-700"
+            >
+              {dark ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+          </div>
         </div>
-        <p className="mt-2.5 text-center text-[10px] leading-relaxed text-ink-muted">
-          Prototype · AI-assisted · Requires HSE/OIL validation
-        </p>
+        <div className="mt-2 flex items-center justify-between px-1 text-[10px] text-ink-muted">
+          <span>Prototype · AI-assisted</span>
+          <a
+            href="http://localhost:8000/docs"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 font-semibold text-brand-600 hover:underline"
+            title="Open FastAPI Swagger Documentation"
+          >
+            API Docs <ExternalLink size={10} />
+          </a>
+        </div>
       </div>
     </>
   );
@@ -183,13 +221,13 @@ export default function Nav() {
   return (
     <>
       {/* ---- Desktop: fixed left rail ---- */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-brand-100 bg-white lg:flex">
+      <aside className="nav-surface fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r lg:flex">
         <BrandLink />
         {sections}
       </aside>
 
       {/* ---- Mobile: compact top bar ---- */}
-      <header className="sticky top-0 z-40 border-b border-brand-100 bg-white/90 backdrop-blur lg:hidden">
+      <header className="nav-surface sticky top-0 z-40 border-b backdrop-blur lg:hidden">
         <div className="flex h-14 items-center justify-between gap-3 px-4">
           <BrandLink compact />
           <div className="flex items-center gap-2">
@@ -225,7 +263,7 @@ export default function Nav() {
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 flex w-[19rem] max-w-[85vw] flex-col bg-white shadow-2xl">
+          <div className="nav-surface absolute inset-y-0 left-0 flex w-[19rem] max-w-[85vw] flex-col shadow-2xl">
             <div className="flex items-center justify-between border-b border-brand-100 px-4 py-3">
               <BrandLink compact />
               <button

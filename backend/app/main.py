@@ -9,13 +9,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import analytics, evaluation, feedback, ingest, reports, review
 from app.config import get_settings
 from app.models.db import SessionLocal, init_db
+from app.models.entities import Analysis
 from app.data.seed import seed_all_if_empty
 from app.services import adaptive
+from app.services.rule_classifier import classify_rule
+from sqlalchemy import select
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+
+
+def backfill_missing_rules(db) -> int:
+    """Assign a text-derived canonical rule to legacy unclassified analyses."""
+    rows = db.execute(
+        select(Analysis).where(Analysis.life_saving_rule.is_(None))
+    ).scalars().all()
+    updated = 0
+    for analysis in rows:
+        rule, _confidence = classify_rule([], analysis.report.report_text if analysis.report else "")
+        if rule:
+            analysis.life_saving_rule = rule
+            updated += 1
+    if updated:
+        db.commit()
+    return updated
 
 
 @asynccontextmanager
@@ -26,6 +45,9 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         seed_all_if_empty(db)
+        updated = backfill_missing_rules(db)
+        if updated:
+            logger.info("Backfilled canonical Life-Saving Rules for %d analyses.", updated)
         adaptive.reload_active(db)
     except Exception as exc:  # noqa: BLE001 — never crash the API because of seeding
         logger.warning("Startup seeding/signals skipped (%s). The API will still run.", exc)
