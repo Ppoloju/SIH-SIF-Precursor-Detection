@@ -43,6 +43,7 @@ const workLinks = [
 ];
 
 const insightLinks = [
+  { href: "/evaluation", label: "Model Evaluation", icon: FlaskConical },
   { href: "/rules", label: "Life-Saving Rules", icon: ShieldCheck },
   { href: "/patterns", label: "Recurring Patterns", icon: Activity },
   { href: "/sites", label: "Site Risk", icon: MapPin },
@@ -202,16 +203,8 @@ export default function Nav() {
           </div>
         </div>
         <div className="mt-2 flex items-center justify-between px-1 text-[10px] text-ink-muted">
-          <span>Prototype · AI-assisted</span>
-          <a
-            href="http://localhost:8000/docs"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 font-semibold text-brand-600 hover:underline"
-            title="Open FastAPI Swagger Documentation"
-          >
-            API Docs <ExternalLink size={10} />
-          </a>
+          <span>OIL SIF Intelligence Engine</span>
+          <span className="font-semibold text-brand-600">v1.0 (Hybrid ML)</span>
         </div>
       </div>
     </>

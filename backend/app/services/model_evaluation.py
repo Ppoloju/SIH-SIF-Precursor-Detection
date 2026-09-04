@@ -51,9 +51,13 @@ def clean_text(text: str) -> str:
 def load_evaluation_data(csv_path: str | None = None) -> tuple[pd.Series, pd.Series, int, int]:
     """Load and preprocess the SIF evaluation dataset."""
     if not csv_path or not os.path.exists(csv_path):
-        # Fallback to default path
-        base_dir = os.path.dirname(os.path.dirname(__file__))
-        csv_path = os.path.join(base_dir, "data", "oil_hsse_sif_dataset.csv")
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        processed_train = os.path.join(repo_root, "data", "processed", "train.csv")
+        if os.path.exists(processed_train):
+            csv_path = processed_train
+        else:
+            base_dir = os.path.dirname(os.path.dirname(__file__))
+            csv_path = os.path.join(base_dir, "data", "oil_hsse_sif_dataset.csv")
 
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"Evaluation dataset not found at {csv_path}")
@@ -100,6 +104,16 @@ def load_evaluation_data(csv_path: str | None = None) -> tuple[pd.Series, pd.Ser
     df["target"] = df[label_col].astype(str).str.strip().str.lower().map(label_map)
     df = df.dropna(subset=["target"])
     df["target"] = df["target"].astype(int)
+
+    # For fast API response (<1.5s), sample up to 300 balanced cases from the dataset
+    if len(df) > 300:
+        pos_mask = df["target"] == 1
+        neg_mask = df["target"] == 0
+        n_pos = min(150, pos_mask.sum())
+        n_neg = min(150, neg_mask.sum())
+        pos_sample = df[pos_mask].sample(n=n_pos, random_state=42)
+        neg_sample = df[neg_mask].sample(n=n_neg, random_state=42)
+        df = pd.concat([pos_sample, neg_sample]).sample(frac=1.0, random_state=42).reset_index(drop=True)
 
     class_counts = df["target"].value_counts().to_dict()
     sif_pos = class_counts.get(1, 0)
@@ -215,12 +229,14 @@ def evaluate_sif_models(csv_path: str | None = None, n_splits: int = 5) -> dict:
     rule_fold_details = []
     r_prec_list, r_rec_list, r_f1_list, r_f2_list, r_acc_list = [], [], [], [], []
 
+    rule_verdicts = np.array([
+        1 if analyze_report(text, use_llm=False)["sif_potential"] else 0
+        for text in X_arr
+    ])
+
     for fold_idx, (train_idx, val_idx) in enumerate(cv.split(X_arr, y_arr), start=1):
-        X_val, y_val = X_arr[val_idx], y_arr[val_idx]
-        y_pred_rule = np.array([
-            1 if analyze_report(text, use_llm=False)["sif_potential"] else 0
-            for text in X_val
-        ])
+        y_val = y_arr[val_idx]
+        y_pred_rule = rule_verdicts[val_idx]
 
         tp = int(np.sum((y_val == 1) & (y_pred_rule == 1)))
         fp = int(np.sum((y_val == 0) & (y_pred_rule == 1)))

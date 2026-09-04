@@ -22,7 +22,7 @@ from app.services.model_evaluation import evaluate_sif_models
 router = APIRouter(tags=["evaluation"])
 
 _cache: dict = {"at": 0.0, "payload": None}
-_TTL_SECONDS = 30.0
+_TTL_SECONDS = 300.0
 
 
 @router.get("/api/evaluation", summary="Golden-set SIF detection & Life-Saving-Rule metrics")

@@ -7,7 +7,7 @@ never invented (when unavailable, raw counts are shown and labeled).
 
 import time
 from collections import Counter, defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends
@@ -97,39 +97,39 @@ def overview(db: Session = Depends(get_db)):
                 barrier_counter[b] += 1
         top_barrier_name = barrier_counter.most_common(1)[0][0] if barrier_counter else None
 
-        # Optimize trend calculation with single query
-        today = date.today()
-        trend_start = today - timedelta(days=56)  # 8 weeks back
-
+        # Optimize trend calculation with single query using fallback date
+        report_date_col = func.coalesce(Report.date, func.date(Report.created_at))
         trend_rows = db.execute(
             select(
-                Report.date,
+                report_date_col.label("effective_date"),
                 Analysis.sif_potential
             )
             .outerjoin(Analysis, Analysis.report_id == Report.id)
-            .where(Report.date >= trend_start)
         ).all()
+
+        valid_dates = [r[0] for r in trend_rows if r[0]]
+        anchor_date = max(valid_dates) if valid_dates else date.today()
+        if isinstance(anchor_date, str):
+            anchor_date = date.fromisoformat(anchor_date)
+        elif isinstance(anchor_date, datetime):
+            anchor_date = anchor_date.date()
 
         # Build trend map grouped by week start (Monday)
         trend_map = defaultdict(lambda: {"total": 0, "sif_count": 0})
         for r_date, sif_pot in trend_rows:
             if r_date:
-                # If r_date is string or datetime.date
-                d = r_date if isinstance(r_date, date) else date.fromisoformat(str(r_date))
+                d = r_date if isinstance(r_date, date) else date.fromisoformat(str(r_date)[:10])
                 week_start = d - timedelta(days=d.weekday())
                 trend_map[week_start]["total"] += 1
                 if sif_pot:
                     trend_map[week_start]["sif_count"] += 1
 
         trend: list[dict] = []
-        for week in range(8, 0, -1):
-            start = today - timedelta(days=week * 7)
+        for week in range(7, -1, -1):
+            start = anchor_date - timedelta(days=week * 7)
             week_start = start - timedelta(days=start.weekday())
-            if week_start in trend_map:
-                data = trend_map[week_start]
-                trend.append({"period": start.strftime("%d %b"), "count": data["total"], "sif_count": data["sif_count"]})
-            else:
-                trend.append({"period": start.strftime("%d %b"), "count": 0, "sif_count": 0})
+            data = trend_map.get(week_start, {"total": 0, "sif_count": 0})
+            trend.append({"period": start.strftime("%d %b"), "count": data["total"], "sif_count": data["sif_count"]})
 
         recent = (
             db.execute(
@@ -143,6 +143,9 @@ def overview(db: Session = Depends(get_db)):
             .scalars()
             .all()
         )
+
+        # Mine precursor patterns for overview card
+        mined_patterns = _compute_patterns(db)["patterns"]
 
         # Semantic linking: each recent row carries up to 3 similar past reports
         # so the dashboard can click through to recurrence context immediately.
@@ -172,7 +175,7 @@ def overview(db: Session = Depends(get_db)):
             "recent_high_priority": [
                 _detail(r, pool=recent_pool, similar_limit=3) for r in recent
             ],
-            "patterns": [],
+            "patterns": mined_patterns[:10],
             "latest_report_at": latest_created.isoformat() if latest_created else None,
             "note": note,
         }
@@ -344,14 +347,7 @@ def barriers(db: Session = Depends(get_db)):
     return {"barriers": out, "note": "Which safety barriers are repeatedly failing."}
 
 
-@router.get("/patterns", summary="Recurring pattern detection")
-def patterns(db: Session = Depends(get_db)):
-    """Recurring combinations mined from structured fields of SIF-potential
-    reports. Only patterns with >= 2 reports are reported — no fabricated
-    patterns. Every pattern carries the *actual* reports that formed it (up to
-    3 preview + the total) and the filter link that opens the full set in the
-    Reports registry.
-    """
+def _compute_patterns(db: Session) -> dict:
     rows = db.execute(
         select(
             Analysis.life_saving_rule,
@@ -438,3 +434,14 @@ def patterns(db: Session = Depends(get_db)):
             "open the real matching reports in the registry."
         ),
     }
+
+
+@router.get("/patterns", summary="Recurring pattern detection")
+def patterns(db: Session = Depends(get_db)):
+    """Recurring combinations mined from structured fields of SIF-potential
+    reports. Only patterns with >= 2 reports are reported — no fabricated
+    patterns. Every pattern carries the *actual* reports that formed it (up to
+    3 preview + the total) and the filter link that opens the full set in the
+    Reports registry.
+    """
+    return _compute_patterns(db)
