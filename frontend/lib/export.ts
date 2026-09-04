@@ -1,7 +1,7 @@
 // Client-side CSV export helpers. Files open directly in Excel / Google Sheets
 // (UTF-8 BOM + CRLF, quoted cells, arrays flattened).
 
-function cellValue(v: unknown): string {
+export function cellValue(v: unknown): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "boolean") return v ? "Yes" : "No";
   if (typeof v === "number") {
