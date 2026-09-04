@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import Integer, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.db import get_db
@@ -97,24 +97,31 @@ def overview(db: Session = Depends(get_db)):
         today = date.today()
         trend_start = today - timedelta(days=56)  # 8 weeks back
         
+        week_expr = func.date_trunc('week', Report.date).label('week')
         trend_data = db.execute(
             select(
-                func.date_trunc('week', Report.date).label('week'),
+                week_expr,
                 func.count(Report.id).label('total'),
                 func.count(Analysis.id).filter(Analysis.sif_potential.is_(True)).label('sif_count')
             )
             .outerjoin(Analysis, Analysis.report_id == Report.id)
             .where(Report.date >= trend_start)
-            .group_by(func.date_trunc('week', Report.date))
-            .order_by(func.date_trunc('week', Report.date))
+            .group_by(week_expr)
+            .order_by(week_expr)
         ).all()
         
         # Build trend from aggregated data
-        trend_map = {row.week: {"total": row.total, "sif_count": row.sif_count} for row in trend_data}
+        trend_map = {
+            row.week.date() if hasattr(row.week, "date") else row.week: {
+                "total": row.total,
+                "sif_count": row.sif_count,
+            }
+            for row in trend_data
+        }
         trend: list[dict] = []
         for week in range(8, 0, -1):
             start = today - timedelta(days=week * 7)
-            week_start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+            week_start = start - timedelta(days=start.weekday())
             if week_start in trend_map:
                 data = trend_map[week_start]
                 trend.append({"period": start.strftime("%d %b"), "count": data["total"], "sif_count": data["sif_count"]})
