@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How Data Is Processed — SIF Precursor Detection · SIH 26165</title>
+<meta name="description" content="Technical documentation for the SIF precursor detection engine: the data-processing pipeline and the algorithm that determines the result of every field." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#ffffff;--pink-50:#fdf2f8;--pink-100:#fce7f3;--pink-200:#fbcfe8;
+    --pink-300:#f9a8d4;--pink-400:#f472b6;--pink-500:#ec4899;--pink-600:#db2777;
+    --pink-700:#be185d;--pink-800:#9d174d;
+    --ink:#2c2329;--ink-soft:#4b424a;--muted:#7a7280;
+    --border:#f1e3ea;--border-strong:#e9d3df;
+    --red:#dc2626;--orange:#ea580c;--green:#16a34a;--blue:#0284c7;
+    --shadow:0 1px 2px rgba(190,24,93,.04),0 8px 24px -12px rgba(190,24,93,.12);
+    --shadow-lg:0 2px 4px rgba(190,24,93,.05),0 20px 44px -16px rgba(190,24,93,.18);
+    --radius:16px;--radius-sm:10px;
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth;scroll-padding-top:76px}
+  body{font-family:var(--font);background:var(--bg);color:var(--ink);line-height:1.65;-webkit-font-smoothing:antialiased}
+  nav{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+  .nav-inner{max-width:1180px;margin:0 auto;padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:62px;gap:14px}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:14px;letter-spacing:-.01em;white-space:nowrap}
+  .brand-mark{width:32px;height:32px;border-radius:9px;flex-shrink:0;background:linear-gradient(135deg,var(--pink-500),var(--pink-700));color:#fff;display:grid;place-items:center;font-size:13px;font-weight:800;box-shadow:0 4px 10px -4px rgba(219,39,119,.5)}
+  .nav-links{display:flex;gap:1px;align-items:center;overflow-x:auto;scrollbar-width:none}
+  .nav-links::-webkit-scrollbar{display:none}
+  .nav-links a{color:var(--ink-soft);text-decoration:none;font-size:12.5px;font-weight:600;padding:6px 10px;border-radius:8px;white-space:nowrap;transition:all .15s}
+  .nav-links a:hover{background:var(--pink-50);color:var(--pink-700)}
+  .nav-links a.active{background:var(--pink-100);color:var(--pink-700)}
+  section{padding:56px 24px}
+  section.alt{background:var(--pink-50);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+  .container{max-width:1080px;margin:0 auto}
+  .center{text-align:center}
+  .narrow{max-width:820px;margin:0 auto}
+  .kicker{display:inline-block;font-size:11.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--pink-600);background:var(--pink-100);border:1px solid var(--pink-200);padding:5px 13px;border-radius:999px;margin-bottom:14px}
+  h2{font-size:clamp(24px,3vw,31px);font-weight:800;line-height:1.16;letter-spacing:-.02em}
+  h2 .hl{color:var(--pink-600)}
+  h3{font-size:16px;font-weight:800;letter-spacing:-.01em}
+  .lede{color:var(--muted);font-size:15.5px;max-width:820px;margin-top:10px}
+  .center .lede{margin-left:auto;margin-right:auto}
+  .callout{margin-top:20px;background:var(--pink-50);border:1px solid var(--pink-200);border-left:4px solid var(--pink-500);border-radius:var(--radius-sm);padding:14px 18px;font-size:14px;color:var(--ink-soft)}
+  .callout b{color:var(--ink)}
+  .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:24px}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr}}
+  .card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+  .card p,.card li{color:var(--ink-soft);font-size:13.5px}
+  .flow{display:flex;flex-direction:column;gap:0;max-width:900px;margin:24px auto 0}
+  .fstep{display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 16px;box-shadow:var(--shadow)}
+  .fstep .n{flex-shrink:0;width:30px;height:30px;border-radius:9px;background:var(--pink-100);color:var(--pink-700);font-family:var(--mono);font-size:12px;font-weight:800;display:grid;place-items:center}
+  .fstep .t{font-size:14px;font-weight:700}
+  .fstep .t span{display:block;font-weight:500;font-size:12.5px;color:var(--muted)}
+  .fstep.io{border-color:var(--pink-200);background:var(--pink-50)}
+  .fconn{text-align:center;color:var(--pink-400);font-size:14px;font-weight:900;line-height:1;padding:6px 0;letter-spacing:2px}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border-strong);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);margin-top:22px;font-size:13px}
+  th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--pink-700);background:var(--pink-100);padding:11px 14px;border-bottom:1px solid var(--border-strong)}
+  td{padding:11px 14px;border-bottom:1px solid var(--border);color:var(--ink-soft);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td b{color:var(--ink)}
+  code{font-family:var(--mono);background:var(--pink-50);border:1px solid var(--pink-200);border-radius:6px;padding:1px 6px;font-size:12px}
+  .muted{color:var(--muted)}
+  .formula{background:var(--ink);color:#f5e8ee;border-radius:12px;padding:14px 18px;font-family:var(--mono);font-size:12.5px;line-height:1.7;margin-top:10px;overflow-x:auto}
+  .formula .c{color:#9ca3af}
+  ul.plain{list-style:none}
+  ul.plain li{padding:6px 0 6px 20px;position:relative;font-size:14px;color:var(--ink-soft)}
+  ul.plain li::before{content:"";position:absolute;left:2px;top:13px;width:7px;height:7px;border-radius:50%;background:var(--pink-400)}
+  footer{background:var(--pink-50);border-top:1px solid var(--border);padding:36px 24px;text-align:center}
+  footer .f-logo{font-size:15px;font-weight:900;color:var(--ink);margin-bottom:6px}
+  footer p{color:var(--muted);font-size:12.5px;max-width:760px;margin:0 auto 6px}
+  .footlinks{margin-top:14px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+  .footlinks a{color:var(--pink-700);font-weight:700;text-decoration:none;font-size:12.5px}
+  .footlinks a:hover{text-decoration:underline}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+
+<!-- ================= NAV ================= -->
+<nav>
+  <div class="nav-inner">
+    <div class="brand"><span class="brand-mark">SIF</span><span>How Data Is Processed</span></div>
+    <div class="nav-links" id="navLinks">
+      <a href="index.html">Showcase</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#fields">Field Algorithms</a>
+      <a href="#scores">Scores</a>
+      <a href="#similarity">Similarity</a>
+      <a href="#evaluation">Evaluation</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ================= HEADER ================= -->
+<section style="padding-top:64px">
+  <div class="container narrow center">
+    <span class="kicker">Technical Documentation</span>
+    <h2>How data is processed, and <span class="hl">which algorithm decides every field</span></h2>
+    <p class="lede">This page documents the actual pipeline that runs in this repository: where a file goes after upload, every processing stage it passes through, and the specific algorithm that determines the result of each output field — with the module names so the claims can be checked against the source.</p>
+  </div>
+</section>
+
+<!-- ================= PIPELINE ================= -->
+<section class="alt" id="pipeline">
+  <div class="container">
+    <div class="center narrow">
+      <span class="kicker">01 · Processing Stages</span>
+      <h2>The journey of a file, <span class="hl">stage by stage</span></h2>
+    </div>
+    <div class="flow">
+      <div class="fstep io"><div class="n">1</div><div class="t">Upload or paste <span>CSV / TSV / TXT / JSON / XLSX (XLSX needs the optional openpyxl package). A row is a report; jobs run inline or in the background with progress stored in the database. Module: <code>ingest.py</code> (parse_rows, start_import_job)</span></div></div>
+      <div class="fconn">↓</div>
+      <div class="fstep"><div class="n">2</div><div class="t">Auto column mapping <span>headers are normalized (lowercase, punctuation stripped) and scored against synonym lists for each canonical slot (text, title, date, site, activity, report_type, report_id, hazard, consequence, barrier_failure, location, equipment, unsafe_type, rule). Assignment is greedy by score so a generic "type" column never becomes the report text and Site_name beats Location_detail for the site slot. The mapping can be overridden per upload. Module: <code>ingest.py</code> (_auto_map_columns, resolve_mapping)</span></div></div>
+      <div class="fconn">↓</div>
+      <div class="fstep"><div class="n">3</div><div class="t">Row normalization <span>dates parsed across common formats, title joined before the report text, Site_name + Location_detail merged, cell values cleaned. Free text is what the AI analyzes; structured columns are kept as candidates for authoritative overrides. Module: <code>ingest.py</code> (normalize_row)</span></div></div>
+      <div class="fconn">↓</div>
+      <div class="fstep"><div class="n">4</div><div class="t">Duplicate fingerprinting <span>each row's text is fingerprinted (lowercased, whitespace/punctuation collapsed, Indic scripts preserved). A row whose text already exists in the database — or repeats inside the same file — is skipped and reported as "duplicate of ...", never stored twice. Module: <code>ingest.py</code> (_text_fingerprint, duplicate check)</span></div></div>
+      <div class="fconn">↓</div>
+      <div class="fstep"><div class="n">5</div><div class="t">Analysis per report <span>every unique row runs through the full engine: indicator detection, rule mapping, extraction, scoring, narrative — detailed in the field table below. Module: <code>analysis_pipeline.py</code> (analyze_report)</span></div></div>
+      <div class="fconn">↓</div>
+      <div class="fstep"><div class="n">6</div><div class="t">File overrides applied <span>when the file provides a structured value (hazard, activity, rule, consequence, barrier_failure, location, equipment, unsafe_type), that value is used as-is — it is the authority. The AI's own extraction is retained in the record for reference only; if the file overrides the Life-Saving Rule, the rule-condition map is cleared so the two never contradict. Module: <code>ingest.py</code> (_apply_file_overrides)</span></div></div>
+      <div class="fconn">↓</div>
+      <div class="fstep"><div class="n">7</div><div class="t">Rule estimation fallback <span>if neither the text nor a file column produced a Life-Saving Rule, the rule is estimated from the file's structured hazard/activity values (e.g. hazard "confined space entry" to Confined Space Entry) and the derivation is stated in the uncertainty note — the field is never left blank when derivable. Module: <code>ingest.py</code> (estimate_rule_from_fields)</span></div></div>
+      <div class="fconn">↓</div>
+      <div class="fstep"><div class="n">8</div><div class="t">Persist report + analysis <span>one Report row and one Analysis row per report, committed progressively (every 10 rows in job mode) so the UI shows live progress. The database schema is created/migrated additively on startup. Modules: <code>models/db.py</code>, <code>models/entities.py</code></span></div></div>
+      <div class="fconn">↓</div>
+      <div class="fstep"><div class="n">9</div><div class="t">HSE review closes the loop <span>stored analyses land in the HSE review queue; human decisions (verify / not SIF / edits) are stored as labeled examples and drive the retraining pass. Modules: <code>api/review.py</code>, <code>services/adaptive.py</code></span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FIELD ALGORITHMS ================= -->
+<section id="fields">
+  <div class="container">
+    <div class="center narrow">
+      <span class="kicker">02 · Field by Field</span>
+      <h2>Which algorithm determines <span class="hl">the result of each field</span></h2>
+      <p class="lede">Every field of a stored analysis, and the exact method that produces it. The pipeline is hybrid: deterministic rule/NLP layers answer first, an optional LLM (Llama via Groq) may only polish wording, and file-provided structured values always win over text extraction.</p>
+    </div>
+
+    <table>
+      <tr><th>Output field</th><th>Algorithm / decision rule</th><th>Module</th></tr>
+      <tr><td><b>sif_potential</b></td><td>True when at least one SIF indicator matches the text. Indicators come from a keyword/phrase lexicon organized per Life-Saving Rule, matched with negation detection ("without isolation", "no permit", "missing guard") so a control that is present is not flagged. English patterns run first, then Hindi / Bengali / Assamese (native script and romanised) patterns; overlapping same-rule matches are de-duplicated. Verdict: <code>risk_scorer.assess</code> returns False when no match survives.</td><td><code>sif_detector.py</code>, <code>multilingual.py</code>, <code>risk_scorer.py</code></td></tr>
+      <tr><td><b>confidence</b></td><td>0.55 when no indicators matched. Otherwise <code>min(0.97, 0.62 + 0.11 * indicators + 0.05 * severity)</code> where severity is the consequence bonus (2 for fatality/serious-injury wording, else 1).</td><td><code>risk_scorer.py</code></td></tr>
+      <tr><td><b>priority</b> (HIGH / MEDIUM / LOW)</td><td>Additive prototype score of four stored factors — matched indicators (capped at 3), consequence severity (0–2), people exposure (0–1), barrier failure (0–1). HIGH at score ≥ 5, MEDIUM at ≥ 3, else LOW. The factors are persisted per report and shown as a "how it was calculated" breakdown. Explicitly not an official OIL risk methodology.</td><td><code>risk_scorer.py</code></td></tr>
+      <tr><td><b>life_saving_rule</b></td><td>The primary rule among the matched indicators (rule classifier picks the most relevant rule and reports its confidence). A file <code>rule</code> column overrides this; if nothing matched and no file value exists, the rule is estimated from hazard/activity fields. One of the canonical ten: Work Authorization, Energy Isolation, Bypassing Safety Controls, Confined Space Entry, Working at Height, Safe Mechanical Lifting, Toxic Gas Safety, Driving Safety, Line of Fire, Hot Work Safety.</td><td><code>rule_classifier.py</code>, <code>ingest.py</code></td></tr>
+      <tr><td><b>hazard</b></td><td>First hazard from the extractor's hazard list (lexicon-driven phrases in the text), or the file's hazard column when provided. Not fabricated: reports with no hazard wording get "Not stated".</td><td><code>information_extractor.py</code>, <code>ingest.py</code></td></tr>
+      <tr><td><b>potential_consequence</b></td><td>The consequence label of the strongest matched indicator (the lexicon assigns each indicator phrase a potential consequence such as fatality / serious injury / fire / exposure).</td><td><code>safety_lexicon.py</code></td></tr>
+      <tr><td><b>barrier_failure</b></td><td>Barriers that were negated or described as missing/defeated in the text (gas testing, isolation, permits, guards...), merged with a file <code>barrier_failure</code> column when present.</td><td><code>information_extractor.py</code>, <code>ingest.py</code></td></tr>
+      <tr><td><b>activity</b></td><td>Extracted activity phrase (maintenance, welding, entry...). When the report never states it, it is inferred from the mapped rule's typical activity table and flagged as inferred in the explanation; a file activity column is used as-is.</td><td><code>information_extractor.py</code>, <code>safety_lexicon.py</code></td></tr>
+      <tr><td><b>location</b></td><td>Location phrase extracted from text with its evidence; a file location column wins. Inferred-from-text locations are flagged in the explanation.</td><td><code>information_extractor.py</code></td></tr>
+      <tr><td><b>equipment</b></td><td>De-duplicated union of English equipment extraction and foreign-language equipment terms; a file equipment list is used when provided.</td><td><code>information_extractor.py</code>, <code>multilingual.py</code></td></tr>
+      <tr><td><b>unsafe_type</b></td><td>Unsafe Act / Unsafe Condition / Near Miss classification from the text (or the file's own classification, used as-is).</td><td><code>information_extractor.py</code>, <code>ingest.py</code></td></tr>
+      <tr><td><b>rule_conditions</b></td><td>Each condition of the mapped Life-Saving Rule is matched against the text and labeled <code>breached</code> / <code>in_place</code> / <code>not_verifiable</code>, each with the exact quoted wording it was inferred from. Cleared when a file rule override contradicts the AI's rule.</td><td><code>rule_mapper.py</code></td></tr>
+      <tr><td><b>evidence</b></td><td>The exact matched indicator phrases, quoted verbatim in the original language — the literal reason a verdict was raised.</td><td><code>sif_detector.py</code>, <code>multilingual.py</code></td></tr>
+      <tr><td><b>languages</b></td><td>Script detection (Devanagari / Bengali / Assamese) plus romanised lexicon detection, reported as codes such as en, hi, hi-latn, bn, bn-latn, as, as-latn.</td><td><code>multilingual.py</code></td></tr>
+      <tr><td><b>summary</b></td><td>Deterministic three-part plain-language narrative (what happened / why it matters / next step) built from the structured result, with breached conditions appended. An optional LLM pass may rephrase it into the report's language; on any failure the deterministic text stands.</td><td><code>narrative.py</code>, <code>llm.py</code></td></tr>
+      <tr><td><b>suggested_actions</b></td><td>Rule-based corrective-action checklist generated from the mapped rule profile and the failed barriers (verify gas testing, reinstate standby, re-isolate, brief the crew, escalate when HIGH).</td><td><code>narrative.py</code></td></tr>
+      <tr><td><b>explanation</b></td><td>Deterministic explanation grounded in the report: quotes the sentence around the first evidence, names the hazard, rule and affected barriers, lists breached conditions, and flags any inferred field. LLM refinement may polish phrasing only.</td><td><code>analysis_pipeline.py</code> (build_explanation), <code>llm.py</code></td></tr>
+      <tr><td><b>uncertainty_note</b></td><td>Honest caveats only: a rule estimated from file fields, an inferred value, or a learned-signal flag. Never used to fabricate content.</td><td><code>ingest.py</code>, <code>adaptive.py</code></td></tr>
+      <tr><td><b>model / llm_refined</b></td><td>Provenance tag of the run: <code>rules-v1</code> deterministic, <code>rules-v1+llm</code> after LLM polish, <code>rules-v1+tuned</code> when learned review signals were applied.</td><td><code>analysis_pipeline.py</code>, <code>adaptive.py</code></td></tr>
+      <tr><td><b>similarity score</b> (with past reports)</td><td>Hybrid: normalized token overlap of the texts plus shared-concept bonuses for the same rule / hazard / barrier / activity (bonuses capped low so genuine near-copies outscore distinct-but-related precursors). Reported with the shared fields so an HSE reviewer can see why two reports are linked.</td><td><code>similarity.py</code></td></tr>
+      <tr><td><b>duplicate / duplicate_of</b></td><td>Exact duplicates are prevented at import by the text fingerprint; stored near-copies at similarity ≥ 0.88 are flagged <code>duplicate_of</code> with a compare link (threshold constant <code>DUP_SIMILARITY</code>).</td><td><code>ingest.py</code>, <code>api/reports.py</code></td></tr>
+      <tr><td><b>review status</b></td><td>Human decision state per report — pending by default, then HSE verified / rejected / edited. Feedbacks are stored as labeled examples for retraining.</td><td><code>api/review.py</code></td></tr>
+      <tr><td><b>aggregate fields</b> (trend, density, patterns)</td><td>Weekly buckets of analyzed reports; SIF precursor density = SIF-potential reports ÷ total reports; recurring patterns group ≥ 2 SIF-potential reports by rule+activity / rule+barrier / hazard+activity, always backed by the real member reports.</td><td><code>services/analytics.py</code></td></tr>
+    </table>
+    <p class="note">Structured file values used "as-is" replace the text-extraction value in the stored record; the AI-extracted value is retained inside the record for reference and never silently merged.</p>
+  </div>
+</section>
+
+<!-- ================= SCORES ================= -->
+<section class="alt" id="scores">
+  <div class="container narrow">
+    <div class="center">
+      <span class="kicker">03 · Scores Explained</span>
+      <h2>Nothing is a <span class="hl">black-box number</span></h2>
+    </div>
+    <div class="formula">confidence = min(0.97, 0.62 + 0.11 * matched_indicators + 0.05 * severity_bonus)   <span class="c"># 0.55 when nothing matched</span>
+priority   = add( matched_indicators (cap 3)
+                , severity_bonus    <span class="c"># 2 if consequence says fatality / serious injury, else 1</span>
+                , exposure_bonus    <span class="c"># 1 if people were exposed (actors/actions present)</span>
+                , barrier_bonus     <span class="c"># 1 if a control was negated or missing ("without", "no", "missing", "bypass", "failed"...)</span> )
+            HIGH  when score &gt;= 5
+            MEDIUM when score &gt;= 3
+            LOW    otherwise
+sif_density (weekly) = SIF-potential reports / total reports in that week</div>
+    <div class="grid-2">
+      <div class="card"><h3>Why these four factors?</h3><p>They mirror how an HSE reviewer triages a report: how many precursor signals are present, how bad the plausible outcome is, whether people were actually exposed, and whether a control was defeated. Each factor is stored per report and shown as its own row in the UI breakdown, so the total is auditable.</p></div>
+      <div class="card"><h3>What it is not</h3><p>The score is an AI-assisted prototype priority intended for early warning and queue ordering. It is not an official OIL risk matrix, and every HIGH/priority surface in the app says so and routes the decision to HSE review.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SIMILARITY ================= -->
+<section id="similarity">
+  <div class="container narrow">
+    <div class="center">
+      <span class="kicker">04 · Similarity, Duplicates, References</span>
+      <h2>How reports are <span class="hl">linked to history</span></h2>
+    </div>
+    <ul class="plain" style="margin-top:14px">
+      <li><b>Similarity means "same precursor, same context":</b> the score combines how much of the text overlaps (token-level) with whether the two reports share the mapped rule, hazard, barrier or activity. Each shared concept adds a small bonus; the caps keep distinct-but-related precursors from outscoring genuine near-copies.</li>
+      <li><b>The reviewer can audit the link:</b> the report page shows the similarity score together with the fields the two reports share, so the number is explainable rather than opaque.</li>
+      <li><b>Duplicates are explicit:</b> import-time fingerprinting refuses to store a row whose text already exists (reported as skipped duplicates), and stored reports at similarity ≥ 0.88 are flagged as near-copies with a compare link.</li>
+      <li><b>Solved case as a reference (site A to site B):</b> when a fresh report matches a past case that another site already reviewed and verified (ideally with action notes), the page highlights that case as the reference and asks HSE to check whether the same corrective action applies — pattern and reference pages open the real member reports, never inline examples.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= EVALUATION ================= -->
+<section class="alt" id="evaluation">
+  <div class="container narrow">
+    <div class="center">
+      <span class="kicker">05 · Evaluation &amp; Retraining</span>
+      <h2>Measured, then <span class="hl">improved by HSE labels</span></h2>
+    </div>
+    <div class="grid-2">
+      <div class="card"><h3>Deterministic benchmark</h3><p>A hand-labeled golden set of 35 reports (English, Hindi, Bengali, Assamese) is scored per class and per Life-Saving Rule with precision / recall / F1 plus a confusion matrix. Runs in milliseconds with no external model. The same set also feeds a <b>stratified 5-fold stability check</b>: folds are dealt round-robin by SIF label x language, and the UI reports mean ± std with a 95% confidence interval — so the metrics are checked for stability across case compositions, not a single lucky split.</p></div>
+      <div class="card"><h3>Feedback-to-retraining loop</h3><p>Each HSE review (verify / reject / edit) becomes a labeled example. The "Train on reviewed labels" pass recomputes model-to-human agreement, mines the surface phrases behind disagreements, and applies them as weighted learned signals to later analyses — tagged <code>rules-v1+tuned</code> and flagged for review. A learned keyword alone never flips a verdict; rules and human review stay in control.</p><p class="note">Roadmap for real data: train-on-synthetic-test-on-real (TSTR), distribution fidelity checks (KS / chi-square), and a real-vs-synthetic discriminator once an HSE-labeled real dataset exists.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <div class="f-logo">SIF Precursor Detection</div>
+  <p>How data is processed and which algorithm decides every field — grounded in the repository source.</p>
+  <p>Smart India Hackathon 2026 · Problem Statement 26165 · Oil India Limited · Theme: Smart Automation</p>
+  <p style="font-size:12px">Prototype · AI-assisted · Requires HSE/OIL validation</p>
+  <div class="footlinks">
+    <a href="index.html">Project showcase</a>
+    <a href="processing.html">How data is processed</a>
+    <a href="http://127.0.0.1:3000" target="_blank" rel="noopener">Open the live app</a>
+  </div>
+</footer>
+
+<script>
+  // Scroll-spy for the active nav link.
+  document.addEventListener("DOMContentLoaded", () => {
+    const anchors = Array.from(document.querySelectorAll(".nav-links a[href^='#']"));
+    const map = new Map(anchors.map(a => [a.getAttribute("href").slice(1), a]));
+    const spy = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          anchors.forEach(a => a.classList.remove("active"));
+          const link = map.get(e.target.id);
+          if (link) link.classList.add("active");
+        }
+      });
+    }, { rootMargin: "-35% 0px -60% 0px" });
+    map.forEach((_, id) => { const el = document.getElementById(id); if (el) spy.observe(el); });
+  });
+</script>
+</body>
+</html>

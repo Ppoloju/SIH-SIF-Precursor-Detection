@@ -82,9 +82,9 @@ class Analysis(Base):
     languages: Mapped[list | None] = mapped_column(JSON, nullable=True)
     # Reviewer-learned-signal note (feedback loop) or LLM honesty note.
     uncertainty_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # File-provided structured values that replaced the AI's text-extracted
-    # value during import: [{"field", "ai", "used", "changed"}]. Lets the UI
-    # show "modified = Y" and keep the AI value as the crosscheck.
+    # File-provided structured values that were used instead of the AI's
+    # text-extracted value during import: [{"field", "ai", "used", "changed"}]
+    # (provenance only — the AI value is kept for reference).
     modified_fields: Mapped[list | None] = mapped_column(JSON, nullable=True)
     # Transparent priority-score breakdown (risk_scorer): the four additive
     # factors {indicators, severity, exposure, barrier_failure} that produced

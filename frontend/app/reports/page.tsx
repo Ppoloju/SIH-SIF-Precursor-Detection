@@ -108,7 +108,7 @@ const prettySource = (s: string | null) =>
           ? "Manual entry"
           : s
     : "";
-// "Modified = Y": the file's structured value replaced an AI-extracted one.
+// File override provenance: the file's structured value replaced an AI-extracted one.
 const hasModification = (r: ReportDetail) =>
   (r.analysis?.modified_fields ?? []).some((m) => m.changed);
 

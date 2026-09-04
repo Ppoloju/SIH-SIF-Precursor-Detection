@@ -39,17 +39,17 @@ const CANONICAL_LABELS: { key: keyof FieldMapping; label: string; hint: string }
   {
     key: "hazard",
     label: "Hazard",
-    hint: "If the file already classifies the hazard, it is used and crosschecked against the AI (marked Y)",
+    hint: "If the file already classifies the hazard, the file value is used as-is",
   },
   {
     key: "consequence",
     label: "Potential consequence",
-    hint: "File value is used and crosschecked against the AI result (marked Y when different)",
+    hint: "File value is used as-is when provided",
   },
   {
     key: "barrier_failure",
     label: "Barrier failure",
-    hint: "Comma-separated barriers are used and crosschecked against the AI result",
+    hint: "Comma-separated barrier values from the file are used as-is",
   },
   {
     key: "location",
@@ -59,17 +59,17 @@ const CANONICAL_LABELS: { key: keyof FieldMapping; label: string; hint: string }
   {
     key: "equipment",
     label: "Equipment",
-    hint: "Comma-separated equipment values are used and crosschecked against the AI result",
+    hint: "Comma-separated equipment values from the file are used as-is",
   },
   {
     key: "unsafe_type",
     label: "Unsafe type",
-    hint: "File classification is used and crosschecked against the AI result",
+    hint: "File classification is used as-is",
   },
   {
     key: "rule",
     label: "Life-Saving Rule",
-    hint: "If the file already maps the rule, it is used and crosschecked against the AI (marked Y)",
+    hint: "If the file already maps the rule, the file value is used as-is",
   },
 ];
 

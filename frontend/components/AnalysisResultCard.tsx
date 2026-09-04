@@ -182,8 +182,8 @@ export default function AnalysisResultCard({
 }) {
   const pct = result.confidence != null ? Math.round(result.confidence * 100) : null;
 
-  // “Data note (modified = Y) …” flags duplicate what the Field Coverage panel
-  // already states and are not surfaced in the UI anymore.
+  // Legacy “Data note …” import crosscheck flags are not surfaced in the UI
+  // anymore (the Field Coverage panel states the same in a cleaner way).
   const note =
     result.uncertainty_note &&
     !result.uncertainty_note.startsWith("Data note")

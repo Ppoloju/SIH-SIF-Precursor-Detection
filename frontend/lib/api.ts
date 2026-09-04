@@ -205,6 +205,59 @@ export interface EvaluationReport {
   runtime_ms: number;
   methodology: string;
   cross_validation?: CrossValidation | null;
+  ml_cross_validation?: MLModelEvaluationResult | null;
+}
+
+export interface MLFoldDetail {
+  fold: number;
+  n_test: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  f2: number;
+  accuracy: number;
+  tp: number;
+  fp: number;
+  fn: number;
+  tn: number;
+}
+
+export interface MLModelResult {
+  model: string;
+  precision_mean: number;
+  precision_std: number;
+  recall_mean: number;
+  recall_std: number;
+  f1_mean: number;
+  f1_std: number;
+  f2_mean: number;
+  f2_std: number;
+  accuracy_mean: number;
+  accuracy_std: number;
+  folds: MLFoldDetail[];
+}
+
+export interface ThresholdAnalysisItem {
+  threshold: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  f2: number;
+  reports_flagged_sif: number;
+}
+
+export interface MLModelEvaluationResult {
+  evaluation_method: string;
+  n_splits: number;
+  total_records: number;
+  sif_positive_records: number;
+  non_sif_records: number;
+  models: MLModelResult[];
+  recommended_model: MLModelResult;
+  threshold_analysis?: ThresholdAnalysisItem[];
+  runtime_ms: number;
+  selection_reason: string;
+  limitations: string[];
 }
 
 export interface LearnedSignal {
@@ -505,9 +558,13 @@ export const api = {
     ),
   getPatterns: () => request<PatternResponse>("/api/analytics/patterns"),
 
-  // Evaluation harness (golden labeled set — deterministic, no LLM).
+  // Evaluation harness & ML 5-fold cross-validation.
   getEvaluation: (fresh = false) =>
     request<EvaluationReport>(`/api/evaluation${fresh ? "?fresh=true" : ""}`),
+  evaluateModel: () =>
+    request<{ success: boolean; data?: MLModelEvaluationResult; error?: string }>("/api/model/evaluate", {
+      method: "POST",
+    }),
 
   // Human-in-the-loop feedback + training.
   getFeedbackSummary: () => request<FeedbackSummary>("/api/feedback/summary"),

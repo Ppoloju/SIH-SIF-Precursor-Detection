@@ -32,7 +32,7 @@ An **AI Safety Early-Warning & SIF Precursor Intelligence Platform** that:
 8. Links **similar historical reports** — every stored report, dashboard row and fresh analysis shows its closest past matches with click-through.
 9. Provides an **HSE dashboard** and a **human-in-the-loop review + retraining workflow** where HSE experts confirm, reject or correct AI results and re-train the decision signals on those labels.
 10. **Dedicated HSE Reviewer workspace** (`/review`) — a separate inbox from the general Reports registry so reviewers are never lost among search/export/admin controls. It shows exactly what still needs a human decision (with a live pending-count badge in the nav), lets the reviewer **Verify as SIF / Not SIF** in one click, and lists verified and rejected records with clear, distinct badges ("Needs HSE review" vs "HSE verified" vs "Rejected · not SIF").
-11. **Missing-field intelligence made visible** — every report page shows a *Field Coverage* panel: each field is tagged **Source file** (authoritative when the file provides it), **AI text analysis** (filled by the engine when the file is silent) or **Not stated** (never fabricated). Values the file overrides are kept with the AI crosscheck as "Modified = Y".
+11. **Missing-field intelligence made visible** — every report page shows a *Field Coverage* panel: each field is tagged **Source file** (authoritative when the file provides it), **AI text analysis** (filled by the engine when the file is silent) or **Not stated** (never fabricated). File-provided values are authoritative and used as-is; the engine only fills fields the file leaves blank.
 12. **Duplicate indication** — rows whose report text is stored more than once get a *Possible duplicate* badge in the Reports table (with a dedicated queue filter), and the report page flags semantic near-copies (closest match ≥ 88% similar) with a direct link to compare — so the same incident re-reported or a file imported twice is never analyzed twice silently.
 13. **Duplicate-safe imports** — when a dataset is imported, rows whose text already exists in the database (or is repeated inside the same file) are skipped automatically and reported as *duplicates skipped* on the import result — identical rows are never stored twice.
 14. **Similar solved case → reference (site A → site B)** — every similar report now carries its site and HSE review state. When the current report matches a case another site already verified (ideally with action notes), the report page highlights it as the reference and asks HSE to check whether the same corrective action applies.
@@ -100,7 +100,7 @@ Everything below runs offline, is deterministic and explainable — the optional
 | 6 | **Hybrid similarity linking** | Similar-report score from token overlap (normalised word-level similarity) **plus** shared rule / hazard / barrier / activity concept bonuses (capped low so genuine near-copies outscore distinct-but-related precursors). Scores are shown with the shared fields on the report page. | `similarity.py` |
 | 7 | **Duplicate detection** | Import-time text fingerprinting skips identical rows (reported as “Row N → duplicate of RPT-x”) and near-copies (similarity ≥ 0.88) are flagged as `duplicate_of` on the report detail. | `ingest.py`, `reports.py` (`DUP_SIMILARITY = 0.88`) |
 | 8 | **Feedback → retraining loop** | Every HSE review is stored as a labelled example; “Train on reviewed labels” computes model↔human agreement (precision / recall / F1), mines the surface phrases of disagreements, and applies them as weighted learned signals to future analyses. | `adaptive.py` |
-| 9 | **Honest field inference** | Each field is tagged *Source file* (authoritative), *AI text analysis* (inferred), or *Not stated* — the engine never fabricates values; file-provided values override AI (kept as the crosscheck). | `ingest.py`, `analysis_pipeline.py` |
+| 9 | **Honest field inference** | Each field is tagged *Source file* (authoritative), *AI text analysis* (inferred), or *Not stated* — the engine never fabricates values; file-provided values are used as-is and the AI extraction is kept for reference. | `ingest.py`, `analysis_pipeline.py` |
 | 10 | **Recurring-pattern mining** | Co-occurrence grouping of ≥ 2 SIF-potential reports by rule+activity / rule+barrier / hazard+activity, backed by the real member reports and clickable into the filtered registry. | `analytics.py` (`/patterns`) |
 | 11 | **Trend & density analytics** | Weekly trend bucketing; SIF precursor density = SIF-potential ÷ total reports; week-over-week deltas; chart types area / line / bar / bar+line on the same data. | `analytics.py`, dashboard |
 | 12 | **Evaluation harness + stability CV** | Holdout golden set (35 hand-labelled reports across EN/HI/BN/AS) with per-class and per-rule precision / recall / F1, plus a stratified k-fold stability check (mean ± std and 95% CI over folds stratified by SIF label × language). | `evaluation.py` (`run_evaluation`, `run_kfold_cv`) · page + CLI |
@@ -130,7 +130,7 @@ Everything below runs offline, is deterministic and explainable — the optional
 **Backend:** Python · FastAPI · Pydantic v2 · SQLAlchemy
 **AI/NLP:** Rule-based NLP + multilingual lexicons (primary) · Llama via Groq (optional) · scikit-learn / Sentence Transformers (optional, when labeled data/keys available)
 **Database:** Local PostgreSQL or SQLite fallback
-**Docs:** standalone `docs/index.html` showcase · `docs/MANUAL_TESTING.md` step-by-step QA checklist
+**Docs:** `docs/index.html` project showcase · `docs/processing.html` data-processing stages and the algorithm behind every output field
 
 ## Repository Structure
 
@@ -235,8 +235,9 @@ The frontend reads `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8000`).
 ### 3. Viewing the demo
 
 ```bash
-# Documentation site — just open in a browser:
-open docs/index.html
+# Documentation — just open in a browser:
+open docs/index.html             # project showcase
+open docs/processing.html        # how data is processed + per-field algorithms
 ```
 
 ## Environment Variables (`.env.example`)
@@ -360,11 +361,17 @@ Also handles Devanagari (`गैस टेस्ट के बिना`), Benga
 
 ## Evaluation
 
-The prototype ships a **real evaluation harness** instead of fabricated numbers:
+The platform ships two distinct, complementary evaluation benchmarks on the **Model Evaluation** (`/evaluation`) page:
 
-- **Golden reference set** — 35 hand-labeled reports in `backend/app/data/golden_set.py` covering all ten Life-Saving Rules plus controlled non-SIF cases, including **Hindi, Bengali and Assamese** reports (native + romanised).
-- **Live Evaluation page** (`/evaluation` in the app) and API (`GET /api/evaluation`) report SIF classification (precision / recall / F1 / accuracy / confusion) and **per-Life-Saving-Rule** precision / recall / F1, plus per-language coverage. Runs deterministically (no LLM) in ~35 ms.
-- **Stratified k-fold stability check** — because a single-split number can be lucky, `run_kfold_cv(5)` deals the golden cases round-robin by (SIF label, language) stratum so every fold mirrors the global SIF-positive ratio and language mix, then reports per-fold P/R/F1/accuracy plus **mean ± std, min–max and a 95% CI**. Shown on the Evaluation page and via:
+### 1. Deterministic Golden-Set Engine Benchmark (35 Multi-lingual Cases)
+- **What it is**: A hand-labeled reference set of 35 incident reports in `backend/app/data/golden_set.py` covering all ten Life-Saving Rules across English, Hindi (Devanagari & Hinglish), Bengali, and Assamese.
+- **Purpose**: Tests the **Rule-Based & Multi-Lingual Engine** (deterministic, offline). It verifies that regional phrase patterns and script translations correctly fire specific Life-Saving Rules and detect SIF potential without needing an external LLM.
+
+### 2. Stratified 5-Fold ML Cross-Validation (500 SIF Reports Dataset)
+- **What it is**: A 5-fold cross-validation suite over a 500-report SIF dataset (`backend/app/data/oil_hsse_sif_dataset.csv`).
+- **Purpose**: Evaluates **Statistical Machine Learning Models** (Multinomial Naive Bayes, Logistic Regression, Linear SVM) against a Rule Engine Baseline. It isolates TF-IDF vectorization within each fold to prevent data leakage and measures per-fold Precision, Recall, $F_1$, and safety-critical $F_2$ scores.
+
+> **Key Distinction**: The Golden Set (35 cases) evaluates **rule-based multi-lingual coverage**, while the 5-Fold Cross-Validation (500 reports) evaluates **statistical ML algorithm performance**.
 
 ```bash
 cd backend

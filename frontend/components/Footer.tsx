@@ -1,6 +1,31 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Cpu, Database, ShieldAlert } from "lucide-react";
 
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
+
 export default function Footer() {
+  const [db, setDb] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_BASE}/api/health`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((h) => {
+        if (alive && h && (h.database === "postgresql" || h.database === "sqlite")) {
+          setDb(h.database);
+        }
+      })
+      .catch(() => {
+        /* backend unreachable — keep the neutral label */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   return (
     <footer className="mt-10 border-t border-brand-100 bg-gradient-to-b from-white to-brand-50/70 px-4 pb-10 pt-8">
       <div className="mx-auto flex max-w-7xl flex-col items-center gap-4 text-center">
@@ -14,9 +39,12 @@ export default function Footer() {
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-semibold text-ink-muted">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-3 py-1">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-3 py-1"
+            title="Engine reported by the backend health check"
+          >
             <Database size={11} className="text-brand-500" />
-            PostgreSQL pipeline
+            {db === "postgresql" ? "PostgreSQL database" : db === "sqlite" ? "SQLite database" : "Database pipeline"}
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-3 py-1">
             <Cpu size={11} className="text-brand-500" />

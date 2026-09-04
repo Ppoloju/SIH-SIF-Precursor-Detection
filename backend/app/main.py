@@ -68,6 +68,7 @@ def health() -> dict:
         "app": settings.app_name,
         "version": settings.app_version,
         "llm_available": bool(settings.groq_api_key),
+        "database": "postgresql" if settings.database_url.startswith(("postgresql", "postgres+")) else "sqlite",
     }
 
 

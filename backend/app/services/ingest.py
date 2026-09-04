@@ -42,8 +42,8 @@ logger = logging.getLogger(__name__)
 # Canonical field -> header it was read from (used for provenance only).
 # `report_id` is the report's own ID from the source file (kept for display,
 # see Report.source_id). `hazard` / `rule` map straight onto the analysis's
-# AI-extracted hazard / Life-Saving Rule — when the file provides them they
-# replace the AI value and the override is recorded as "modified = Y".
+# AI-extracted hazard / Life-Saving Rule — when the file provides those
+# values they are used as-is (authoritative).
 CANONICALS = [
     "text", "title", "date", "site", "activity", "report_type", "report_id",
     "hazard", "consequence", "barrier_failure", "location", "equipment",
@@ -505,10 +505,10 @@ _FILE_OVERRIDE_FIELDS: list[tuple[str, str]] = [
 def _apply_file_overrides(result: dict, norm: dict) -> list[dict]:
     """Let file-provided structured values win over the AI text extraction.
 
-    Returns one record per applied value for the UI's "modified = Y" marker:
+    Returns one record per applied value for provenance:
     ``{"field", "canonical", "ai", "used", "changed"}`` — ``changed`` is True
-    only when an actual AI value was replaced (the AI value stays available as
-    the crosscheck). If the file overrides the Life-Saving Rule, the rule-
+    only when an actual AI value was replaced (the AI value stays recorded as
+    the reference). If the file overrides the Life-Saving Rule, the rule-
     condition map (derived for the AI's rule) is cleared so the two never
     contradict.
     """
@@ -534,24 +534,6 @@ def _apply_file_overrides(result: dict, norm: dict) -> list[dict]:
             }
         )
 
-    # Keep the stored summary honest when file values replaced the AI's: the
-    # plain-language narrative was generated from the AI's text analysis, so
-    # say so instead of letting it silently contradict the file fields.
-    changed_entries = [m for m in modified if m["changed"]]
-    if changed_entries:
-        bits = []
-        for m in changed_entries:
-            label = {"activity": "activity", "hazard": "hazard", "life_saving_rule": "life-saving rule"}.get(
-                m["field"], m["field"]
-            )
-            bits.append(
-                f"{label}: file says \u201c{m['used']}\u201d (AI text-analysis had extracted \u201c{m['ai']}\u201d)"
-            )
-        note = (
-            "Data note (modified = Y) \u2014 fields set from the imported file, "
-            "crosschecked against the AI: " + "; ".join(bits) + "."
-        )
-        result["summary"] = ((result.get("summary") or "") + "\n\n" + note).strip()
     return modified
 
 
@@ -591,8 +573,8 @@ def _import_one_row(
         return {"ok": False, "skipped": False, "error": f"{type(exc).__name__}: {exc}"[:400],
                 "report": report}
 
-    # File-provided structured values win over AI extraction; every override
-    # is recorded so the UI can show "modified = Y" with the AI crosscheck.
+    # File-provided structured values win over AI text extraction; every
+    # override is recorded for provenance.
     modified_fields = _apply_file_overrides(result, norm)
 
     # If neither the free text nor a file-provided rule column produced a
