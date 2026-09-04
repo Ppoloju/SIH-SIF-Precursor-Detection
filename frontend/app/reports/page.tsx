@@ -33,6 +33,7 @@ export default function ReportsPage() {
   const [rule, setRule] = useState("");
   const [status, setStatus] = useState("");
   const [sif, setSif] = useState("");
+  const [file, setFile] = useState("");
 
   // Human-in-the-loop: reviewed labels + "train" action.
   const [fb, setFb] = useState<FeedbackSummary | null>(null);
@@ -50,7 +51,7 @@ export default function ReportsPage() {
     async function load() {
       setLoading(true);
       try {
-        const data = await api.getReports({ limit: "500" });
+        const data = await api.getReports({ limit: "10000" });
         if (cancelled) return;
         setReports(data);
         setError(null);
@@ -93,11 +94,43 @@ export default function ReportsPage() {
       if (priority && r.analysis?.priority !== priority) return false;
       if (rule && r.analysis?.life_saving_rule !== rule) return false;
       if (status && r.review_status !== status) return false;
+      if (file && r.source !== file) return false;
       if (sif === "true" && !r.analysis?.sif_potential) return false;
       if (sif === "false" && r.analysis?.sif_potential) return false;
       return true;
     });
-  }, [reports, q, site, activity, priority, rule, status, sif]);
+  }, [reports, q, site, activity, priority, rule, status, sif, file]);
+
+  const files = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          reports
+            .filter((r) => r.source)
+            .map((r) => [r.source, r.source as string])
+        ).values()
+      ).sort((a, b) => a.localeCompare(b)),
+    [reports]
+  );
+  // Display name for a report source ("upload:filename.csv" -> filename).
+  const prettySource = (s: string | null) =>
+    s
+      ? s.startsWith("upload:")
+        ? s.slice(7)
+        : s === "demo"
+          ? "Demo dataset"
+          : s === "manual"
+            ? "Manual entry"
+            : s
+      : "";
+  // "Modified = Y": the file's structured value replaced an AI-extracted one.
+  const hasModification = (r: ReportDetail) =>
+    (r.analysis?.modified_fields ?? []).some((m) => m.changed);
+  const modifiedLabel = (r: ReportDetail) =>
+    (r.analysis?.modified_fields ?? [])
+      .filter((m) => m.changed)
+      .map((m) => `${m.field} → “${m.used}” (AI: “${m.ai}”)`)
+      .join(" · ");
 
   const sites = useMemo(() => Array.from(new Set(reports.map((r) => r.site).filter(Boolean))).sort(), [reports]);
   const activities = useMemo(
@@ -114,13 +147,14 @@ export default function ReportsPage() {
       sif: reports.filter((r) => r.analysis?.sif_potential).length,
       high: reports.filter((r) => r.analysis?.priority === "HIGH").length,
       pending: reports.filter((r) => r.review_status === "pending").length,
+      reviewed: reports.filter((r) => r.review_status && r.review_status !== "pending").length,
     }),
     [reports]
   );
 
   // Quick-review shortcuts — each sets one view and clears the others.
   function setView(
-    view: "all" | "sif" | "high" | "pending",
+    view: "all" | "sif" | "high" | "pending" | "reviewed",
   ) {
     setQ("");
     if (view === "all") {
@@ -135,6 +169,10 @@ export default function ReportsPage() {
       setSif("");
       setPriority("HIGH");
       setStatus("");
+    } else if (view === "reviewed") {
+      setSif("");
+      setPriority("");
+      setStatus("reviewed");
     } else {
       setSif("");
       setPriority("");
@@ -150,7 +188,7 @@ export default function ReportsPage() {
       setTrainResult(res);
       setFb(await api.getFeedbackSummary());
       // Re-fetch so review counts stay fresh after labels are consumed.
-      const data = await api.getReports({ limit: "500" });
+      const data = await api.getReports({ limit: "10000" });
       setReports(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Training failed");
@@ -164,10 +202,14 @@ export default function ReportsPage() {
   const viewSif = sif === "true" && priority === "" && status === "";
   const viewHigh = priority === "HIGH" && sif === "" && status === "";
   const viewPending = status === "pending" && sif === "" && priority === "";
+  const viewReviewed = status === "reviewed" && sif === "" && priority === "";
 
   // Export exactly what the user sees (filters + search applied).
   const exportRows = filtered.map((r) => ({
-    "Report ID": r.report_id,
+    "Report ID": r.source_id ?? r.report_id,
+    "File ID": r.source_id ?? "",
+    "Source File": prettySource(r.source),
+    "Modified (Y/N)": hasModification(r) ? "Y" : "N",
     Date: r.date ?? "",
     Type: r.report_type ?? "",
     Site: r.site ?? "",
@@ -230,6 +272,12 @@ export default function ReportsPage() {
           label="Pending HSE review"
           count={counts.pending}
           amber
+        />
+        <FilterChip
+          active={viewReviewed}
+          onClick={() => setView("reviewed")}
+          label="HSE reviewed"
+          count={counts.reviewed}
         />
         {!viewAll && (
           <button
@@ -377,6 +425,19 @@ export default function ReportsPage() {
             <option value="true">SIF: Yes</option>
             <option value="false">SIF: No</option>
           </select>
+          <select
+            value={file}
+            onChange={(e) => setFile(e.target.value)}
+            title="Filter by the file / dataset the report was imported from"
+            className="rounded-xl border border-brand-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-400"
+          >
+            <option value="">All files</option>
+            {files.map((f) => (
+              <option key={f} value={f}>
+                {prettySource(f)}
+              </option>
+            ))}
+          </select>
           <div className="flex items-center gap-2 text-xs text-ink-muted md:col-span-4">
             <SlidersHorizontal size={13} />
             {filtered.length} of {reports.length} reports
@@ -390,76 +451,106 @@ export default function ReportsPage() {
         )}
 
         <div className="table-wrap mt-4">
-          <table className="w-full min-w-[880px] text-left text-sm">
+          <table className="w-full min-w-[1020px] text-left text-sm">
             <thead>
               <tr className="table-head">
-                <th className="px-3 py-2.5">Report ID</th>
-                <th className="px-3 py-2.5">Date</th>
-                <th className="px-3 py-2.5">Site</th>
-                <th className="px-3 py-2.5">Activity</th>
-                <th className="px-3 py-2.5">SIF</th>
-                <th className="px-3 py-2.5">Priority</th>
-                <th className="px-3 py-2.5">Life-Saving Rule</th>
-                <th className="px-3 py-2.5">Barrier Failure</th>
-                <th className="px-3 py-2.5">Review</th>
-                <th className="px-3 py-2.5">View</th>
+                <th className="px-4 py-3 font-semibold">Report ID</th>
+                <th className="px-4 py-3 font-semibold">File ID</th>
+                <th className="px-4 py-3 font-semibold">Source file</th>
+                <th className="px-4 py-3 font-semibold">Date</th>
+                <th className="px-4 py-3 font-semibold">Site</th>
+                <th className="px-4 py-3 font-semibold">Activity</th>
+                <th className="px-4 py-3 font-semibold">SIF</th>
+                <th className="px-4 py-3 font-semibold">Priority</th>
+                <th className="px-4 py-3 font-semibold">Life-Saving Rule</th>
+                <th className="px-4 py-3 font-semibold">Barrier Failure</th>
+                <th className="px-4 py-3 font-semibold">Mod.</th>
+                <th className="px-4 py-3 font-semibold">Review</th>
+                <th className="px-4 py-3 font-semibold">View</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-10 text-center">
-                    <Loader2 className="mx-auto animate-spin text-brand-500" size={22} />
+                  <td colSpan={13} className="px-4 py-12 text-center">
+                    <Loader2 className="mx-auto animate-spin text-brand-500" size={24} />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-10 text-center text-sm text-ink-muted">
+                  <td colSpan={13} className="px-4 py-12 text-center text-sm text-ink-muted">
                     No reports match the current filters.
                   </td>
                 </tr>
               ) : (
                 filtered.map((r) => (
                   <tr key={r.id} className="table-row">
-                    <td className="px-2 py-2.5">
+                    <td className="px-4 py-3">
                       <Link
                         href={`/reports/${r.id}`}
                         className="font-mono text-xs font-semibold text-brand-700 hover:underline"
                       >
-                        {r.report_id}
+                        {r.source_id ?? r.report_id}
                       </Link>
                       {r.is_demo && (
-                        <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-600">
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
                           demo
                         </span>
                       )}
                     </td>
-                    <td className="px-2 py-2.5 text-xs text-ink-soft">{r.date ?? "—"}</td>
-                    <td className="px-2 py-2.5 text-xs text-ink-soft">{r.site ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-xs text-ink-soft">
+                    <td className="px-4 py-3 font-mono text-xs text-ink-soft">
+                      {r.source_id ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-ink-soft">
+                      {r.source ? (
+                        <span
+                          className="inline-block max-w-[150px] truncate align-middle"
+                          title={prettySource(r.source)}
+                        >
+                          {prettySource(r.source)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-ink-soft">{r.date ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs text-ink-soft">{r.site ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs text-ink-soft">
                       {r.activity ?? r.analysis?.activity ?? "—"}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-4 py-3">
                       <SifBadge sif={r.analysis?.sif_potential ?? false} />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-4 py-3">
                       <PriorityBadge priority={r.analysis?.priority ?? null} />
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-ink-soft">
+                    <td className="px-4 py-3 text-xs text-ink-soft">
                       {r.analysis?.life_saving_rule ?? "—"}
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-ink-soft">
+                    <td className="px-4 py-3 text-xs text-ink-soft">
                       {r.analysis?.barrier_failure?.length
                         ? r.analysis.barrier_failure.slice(0, 2).join(", ")
                         : "—"}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-4 py-3">
+                      {hasModification(r) ? (
+                        <span
+                          title={`File value replaced AI extraction — ${modifiedLabel(r)}`}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-[10px] font-extrabold text-amber-700"
+                        >
+                          Y
+                        </span>
+                      ) : (
+                        <span className="text-xs text-ink-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
                       <ReviewBadge status={r.review_status} />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-4 py-3">
                       <Link
                         href={`/reports/${r.id}`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-brand-200 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50"
                       >
                         <Eye size={12} /> View
                       </Link>

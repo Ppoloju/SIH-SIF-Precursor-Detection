@@ -52,7 +52,12 @@ class AnalysisOut(BaseModel):
     barrier_failure: Optional[list[str]] = None
     life_saving_rule: Optional[str] = None
     activity: Optional[str] = None
+    location: Optional[str] = None
+    equipment: Optional[list[str]] = None
+    unsafe_type: Optional[str] = None
     evidence: Optional[list[str]] = None
+    rule_conditions: Optional[list[dict[str, Any]]] = None
+    modified_fields: Optional[list[dict[str, Any]]] = None
     explanation: Optional[str] = None
     recommended_follow_up: Optional[str] = None
     summary: Optional[str] = None
@@ -98,6 +103,7 @@ class ReportOut(BaseModel):
     activity: Optional[str] = None
     is_demo: bool
     source: Optional[str] = Field(default=None, max_length=64)
+    source_id: Optional[str] = Field(default=None, max_length=64)
     processing_status: str = "analyzed"
     created_at: datetime
 
@@ -127,6 +133,7 @@ class AnalysisResultOut(BaseModel):
     equipment: list[str] = []
     unsafe_type: Optional[str] = None
     evidence: list[str] = []
+    rule_conditions: list[dict[str, Any]] = []
     explanation: Optional[str] = None
     recommended_follow_up: Optional[str] = None
     summary: Optional[str] = None

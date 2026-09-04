@@ -16,7 +16,6 @@ const links = [
   { href: "/activities", label: "Activities" },
   { href: "/barriers", label: "Barriers" },
   { href: "/patterns", label: "Patterns" },
-  { href: "/evaluation", label: "Evaluation" },
 ];
 
 export default function Nav() {

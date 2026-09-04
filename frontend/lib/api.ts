@@ -11,6 +11,22 @@ export type ReviewStatus =
   | "edited"
   | "reviewed";
 
+export interface RuleCondition {
+  condition: string;
+  status: "breached" | "in_place" | "not_verifiable";
+  evidence: string[];
+}
+
+/** One file-provided structured value that replaced the AI text-extraction.
+ *  `changed: true` = the AI produced a different value -> UI shows “Y”. */
+export interface AnalysisOverride {
+  field: string;
+  canonical: string;
+  ai: string | null;
+  used: string;
+  changed: boolean;
+}
+
 export interface Report {
   id: number;
   report_id: string;
@@ -21,6 +37,7 @@ export interface Report {
   activity: string | null;
   is_demo: boolean;
   source: string | null;
+  source_id: string | null;
   processing_status: string;
   created_at: string;
 }
@@ -36,7 +53,12 @@ export interface Analysis {
   barrier_failure: string[] | null;
   life_saving_rule: string | null;
   activity: string | null;
+  location: string | null;
+  equipment: string[] | null;
+  unsafe_type: string | null;
   evidence: string[] | null;
+  rule_conditions: RuleCondition[] | null;
+  modified_fields: AnalysisOverride[] | null;
   explanation: string | null;
   recommended_follow_up: string | null;
   summary: string | null;
@@ -60,6 +82,7 @@ export interface AnalysisResult {
   equipment: string[];
   unsafe_type: string | null;
   evidence: string[];
+  rule_conditions: RuleCondition[];
   explanation: string | null;
   recommended_follow_up: string | null;
   summary: string | null;
@@ -241,7 +264,23 @@ export interface Pattern {
 
 /** Ingest column mapping: canonical field -> column name | null (explicit none). */
 export type FieldMapping = Partial<
-  Record<"text" | "title" | "date" | "site" | "activity" | "report_type", string | null>
+  Record<
+    | "text"
+    | "title"
+    | "date"
+    | "site"
+    | "activity"
+    | "report_type"
+    | "report_id"
+    | "hazard"
+    | "consequence"
+    | "barrier_failure"
+    | "location"
+    | "equipment"
+    | "unsafe_type"
+    | "rule",
+    string | null
+  >
 >;
 
 export interface IngestSample {

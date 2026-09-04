@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # Set to 0 to keep the database empty (import your own dataset) instead
     # of seeding the clearly-labeled synthetic demo reports on startup.
-    seed_demo_data: bool = True
+    seed_demo_data: bool = False
 
     # Optional AI services (may be empty — the pipeline degrades gracefully).
     groq_api_key: str = ""

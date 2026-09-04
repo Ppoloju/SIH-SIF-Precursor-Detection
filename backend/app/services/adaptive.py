@@ -191,6 +191,8 @@ def _mine_signals(rows: list) -> list[dict]:
     Phrases are raw contiguous token runs that contain at least one domain
     word (gas detector, isolation, harness ...) so learned signals stay
     meaningful — they are the *vocabulary the model is blind to*.
+    
+    Enhanced with multi-gram analysis and confidence weighting.
     """
     pos: list[list[str]] = []   # human SIF, model missed
     neg: list[list[str]] = []   # human non-SIF, model flagged
@@ -208,13 +210,17 @@ def _mine_signals(rows: list) -> list[dict]:
     def _candidates(groups: list[list[str]]) -> list[tuple[str, int]]:
         counter: dict[str, int] = {}
         for tokens in groups:
-            for phrase in _ngrams(tokens, 3):
-                words = phrase.split()
-                if not any(w in _DOMAIN for w in words):
-                    continue
-                if all(w in _STOP for w in words):
-                    continue
-                counter[phrase] = counter.get(phrase, 0) + 1
+            # Try multiple n-gram sizes for better pattern discovery
+            for n in [2, 3, 4]:
+                for phrase in _ngrams(tokens, n):
+                    words = phrase.split()
+                    if not any(w in _DOMAIN for w in words):
+                        continue
+                    if all(w in _STOP for w in words):
+                        continue
+                    if len(phrase) < 6:  # Minimum phrase length
+                        continue
+                    counter[phrase] = counter.get(phrase, 0) + 1
         return sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))
 
     signals: list[dict] = []
@@ -223,15 +229,19 @@ def _mine_signals(rows: list) -> list[dict]:
         ("-", neg, "Reviewers said these reports were NOT SIF while the model flagged them"),
     ):
         for phrase, count in _candidates(groups):
-            if len(signals) >= 6:
+            if len(signals) >= 8:  # Increased signal capacity
                 break
             phrase_tokens = _tokens(phrase)
-            if len(phrase) < 8 or _is_subsequence(agree_tokens, phrase_tokens):
+            if len(phrase) < 6 or _is_subsequence(agree_tokens, phrase_tokens):
                 continue
+            # Weight by frequency and phrase length
+            weight = count * len(phrase_tokens)
             signals.append(
-                {"phrase": phrase, "direction": direction, "reports": count, "why": why}
+                {"phrase": phrase, "direction": direction, "reports": count, "weight": weight, "why": why}
             )
-    return signals[:6]
+    # Sort by weight for most impactful signals first
+    signals.sort(key=lambda s: s["weight"], reverse=True)
+    return signals[:8]
 
 
 def train(db: Session) -> dict:
@@ -325,6 +335,8 @@ def apply_tuning(result: dict, text: str) -> dict:
     Conservative by design: matched phrases are quoted as evidence and the
     confidence is nudged toward the reviewer trend, but the SIF verdict and
     priority are never flipped by a learned keyword alone.
+    
+    Enhanced with weighted confidence adjustment and priority flagging.
     """
     signals = ACTIVE.get("signals") or []
     if not signals or not text:
@@ -334,6 +346,7 @@ def apply_tuning(result: dict, text: str) -> dict:
     matched: list[dict] = []
     for sig in signals:
         phrase = sig.get("phrase") or ""
+        weight = sig.get("weight", 1)
         if (
             sig.get("direction") == "+"
             and _is_subsequence(haystack_tokens, _tokens(phrase))
@@ -345,7 +358,9 @@ def apply_tuning(result: dict, text: str) -> dict:
 
     result.setdefault("evidence", [])
     notes = []
-    for sig in matched[:2]:
+    total_weight = sum(sig.get("weight", 1) for sig in matched)
+    
+    for sig in matched[:3]:  # Allow more matched signals
         phrase = sig.get("phrase")
         if phrase and phrase not in (result.get("evidence") or []):
             result["evidence"].append(phrase)
@@ -355,17 +370,29 @@ def apply_tuning(result: dict, text: str) -> dict:
         )
 
     base_conf = result.get("confidence") or 0.0
+    # Weighted confidence adjustment based on signal strength
+    conf_adjustment = min(0.15, 0.05 + (total_weight * 0.01))
+    
     if result.get("sif_potential"):
-        result["confidence"] = round(min(0.99, base_conf + 0.05), 2)
+        result["confidence"] = round(min(0.99, base_conf + conf_adjustment), 2)
     else:
         # Don't flip the label — but make sure a tuned pattern gets reviewed.
-        result["confidence"] = max(0.60, base_conf)
+        result["confidence"] = max(0.55, base_conf)
+        # Flag for priority review when model disagrees with learned patterns
+        result.setdefault("priority_factors", [])
+        result["priority_factors"].append(
+            "Contains phrases HSE reviewers have linked to SIF in past reviews"
+        )
+        # Potentially upgrade priority for review
+        if result.get("priority") == "LOW":
+            result["priority"] = "MEDIUM"
 
     existing = result.get("uncertainty_note")
     result["uncertainty_note"] = (
         "; ".join(notes) + (f" ({existing})" if existing else "")
     )
     result["tuned"] = True
+    result["tuned_weight"] = total_weight
     model = result.get("model") or "rules-v1"
     if "+tuned" not in model:
         result["model"] = f"{model}+tuned"

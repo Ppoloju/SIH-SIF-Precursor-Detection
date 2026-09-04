@@ -5,8 +5,10 @@ patterns. Metrics are computed from available data only; denominators are
 never invented (when unavailable, raw counts are shown and labeled).
 """
 
+import time
 from collections import Counter, defaultdict
 from datetime import date, timedelta
+from functools import lru_cache
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
@@ -18,6 +20,21 @@ from app.schemas.reports import ReportDetailOut, ReportOut
 from app.services import similarity
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
+
+# Simple in-memory cache for analytics endpoints
+_cache: dict = {}
+_TTL_SECONDS = 60  # Cache analytics for 60 seconds
+
+
+def _get_cached(key: str, compute_fn):
+    """Get cached result or compute fresh if cache expired."""
+    now = time.time()
+    if key in _cache and now - _cache[key]["time"] < _TTL_SECONDS:
+        return _cache[key]["data"]
+    
+    data = compute_fn()
+    _cache[key] = {"time": now, "data": data}
+    return data
 
 
 def _detail(report: Report, pool: list[dict] | None = None, similar_limit: int = 0) -> ReportDetailOut:
@@ -39,124 +56,149 @@ def _detail(report: Report, pool: list[dict] | None = None, similar_limit: int =
 
 @router.get("/overview", summary="Dashboard overview KPIs")
 def overview(db: Session = Depends(get_db)):
-    total = db.scalar(select(func.count(Report.id))) or 0
-    sif_count = (
-        db.scalar(select(func.count(Analysis.id)).where(Analysis.sif_potential.is_(True))) or 0
-    )
-    high_count = (
-        db.scalar(select(func.count(Analysis.id)).where(Analysis.priority == "HIGH")) or 0
-    )
-
-    top_rule = db.execute(
-        select(Analysis.life_saving_rule, func.count(Analysis.id))
-        .where(Analysis.life_saving_rule.is_not(None))
-        .group_by(Analysis.life_saving_rule)
-        .order_by(func.count(Analysis.id).desc())
-        .limit(1)
-    ).first()
-
-    # Note: grouping by a JSON column is not portable (PostgreSQL has no =
-    # operator for `json`), so the top barrier is tallied in Python.
-    barrier_counter: Counter = Counter()
-    for (barrier_list,) in db.execute(
-        select(Analysis.barrier_failure).where(Analysis.barrier_failure.is_not(None))
-    ).all():
-        for b in barrier_list or []:
-            barrier_counter[b] += 1
-    top_barrier_name = barrier_counter.most_common(1)[0][0] if barrier_counter else None
-
-    today = date.today()
-    trend: list[dict] = []
-    for week in range(8, 0, -1):
-        start = today - timedelta(days=week * 7)
-        end = today - timedelta(days=(week - 1) * 7)
-        total_w = (
-            db.scalar(select(func.count(Report.id)).where(Report.date >= start, Report.date < end))
-            or 0
-        )
-        sif_w = (
-            db.scalar(
-                select(func.count(Analysis.id))
-                .join(Report, Analysis.report_id == Report.id)
-                .where(Analysis.sif_potential.is_(True), Report.date >= start, Report.date < end)
+    def _compute_overview():
+        # Combine base counts into a single query for better performance
+        base_stats = db.execute(
+            select(
+                func.count(Report.id).label("total"),
+                func.count(Analysis.id).filter(Analysis.sif_potential.is_(True)).label("sif_count"),
+                func.count(Analysis.id).filter(Analysis.priority == "HIGH").label("high_count"),
+                func.count(Report.id).filter(Report.is_demo.is_(True)).label("demo_count"),
+                func.max(Report.created_at).label("latest_created")
             )
-            or 0
+            .outerjoin(Analysis, Analysis.report_id == Report.id)
+        ).first()
+        
+        total = base_stats.total or 0
+        sif_count = base_stats.sif_count or 0
+        high_count = base_stats.high_count or 0
+        demo_count = base_stats.demo_count or 0
+        latest_created = base_stats.latest_created
+
+        top_rule = db.execute(
+            select(Analysis.life_saving_rule, func.count(Analysis.id))
+            .where(Analysis.life_saving_rule.is_not(None))
+            .group_by(Analysis.life_saving_rule)
+            .order_by(func.count(Analysis.id).desc())
+            .limit(1)
+        ).first()
+
+        # Note: grouping by a JSON column is not portable (PostgreSQL has no =
+        # operator for `json`), so the top barrier is tallied in Python.
+        barrier_counter: Counter = Counter()
+        for (barrier_list,) in db.execute(
+            select(Analysis.barrier_failure).where(Analysis.barrier_failure.is_not(None))
+        ).all():
+            for b in barrier_list or []:
+                barrier_counter[b] += 1
+        top_barrier_name = barrier_counter.most_common(1)[0][0] if barrier_counter else None
+
+        # Optimize trend calculation with single query instead of 16 separate queries
+        today = date.today()
+        trend_start = today - timedelta(days=56)  # 8 weeks back
+        
+        trend_data = db.execute(
+            select(
+                func.date_trunc('week', Report.date).label('week'),
+                func.count(Report.id).label('total'),
+                func.count(Analysis.id).filter(Analysis.sif_potential.is_(True)).label('sif_count')
+            )
+            .outerjoin(Analysis, Analysis.report_id == Report.id)
+            .where(Report.date >= trend_start)
+            .group_by(func.date_trunc('week', Report.date))
+            .order_by(func.date_trunc('week', Report.date))
+        ).all()
+        
+        # Build trend from aggregated data
+        trend_map = {row.week: {"total": row.total, "sif_count": row.sif_count} for row in trend_data}
+        trend: list[dict] = []
+        for week in range(8, 0, -1):
+            start = today - timedelta(days=week * 7)
+            week_start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+            if week_start in trend_map:
+                data = trend_map[week_start]
+                trend.append({"period": start.strftime("%d %b"), "count": data["total"], "sif_count": data["sif_count"]})
+            else:
+                trend.append({"period": start.strftime("%d %b"), "count": 0, "sif_count": 0})
+
+        recent = (
+            db.execute(
+                select(Report)
+                .options(selectinload(Report.analysis), selectinload(Report.reviews))
+                .join(Analysis, Analysis.report_id == Report.id)
+                .where(Analysis.priority == "HIGH")
+                .order_by(Report.date.desc().nullslast(), Report.id.desc())
+                .limit(10)
+            )
+            .scalars()
+            .all()
         )
-        trend.append({"period": start.strftime("%d %b"), "count": total_w, "sif_count": sif_w})
 
-    recent = (
-        db.execute(
-            select(Report)
-            .options(selectinload(Report.analysis), selectinload(Report.reviews))
-            .join(Analysis, Analysis.report_id == Report.id)
-            .where(Analysis.priority == "HIGH")
-            .order_by(Report.date.desc().nullslast(), Report.id.desc())
-            .limit(10)
-        )
-        .scalars()
-        .all()
-    )
+        # Semantic linking: each recent row carries up to 3 similar past reports
+        # so the dashboard can click through to recurrence context immediately.
+        recent_pool = None
+        if recent and total > 0:
+            recent_pool = similarity.pool_rows(db, exclude_id=-1)
 
-    # Semantic linking: each recent row carries up to 3 similar past reports
-    # so the dashboard can click through to recurrence context immediately.
-    recent_pool = None
-    if recent and total > 0:
-        recent_pool = similarity.pool_rows(db, exclude_id=-1)
+        # Data-driven note so the product never claims demo data when the user is
+        # looking at (or missing) their own imports.
+        if total == 0:
+            note = "No reports yet — import your first dataset from the Import Data page and the dashboard fills in live."
+        elif demo_count == total:
+            note = "All metrics are computed live from the synthetic demo set (labeled in the UI) — import your own dataset anytime."
+        elif demo_count:
+            note = f"{demo_count} of {total} reports are labeled demo rows; the rest are your imported data."
+        else:
+            note = "Metrics computed live from your imported dataset."
 
-    latest_created = db.scalar(select(func.max(Report.created_at)))
-    demo_count = (
-        db.scalar(select(func.count(Report.id)).where(Report.is_demo.is_(True))) or 0
-    )
-
-    # Data-driven note so the product never claims demo data when the user is
-    # looking at (or missing) their own imports.
-    if total == 0:
-        note = "No reports yet — import your first dataset from the Import Data page and the dashboard fills in live."
-    elif demo_count == total:
-        note = "All metrics are computed live from the synthetic demo set (labeled in the UI) — import your own dataset anytime."
-    elif demo_count:
-        note = f"{demo_count} of {total} reports are labeled demo rows; the rest are your imported data."
-    else:
-        note = "Metrics computed live from your imported dataset."
-
-    return {
-        "total_reports": total,
-        "sif_potential_reports": sif_count,
-        "sif_density": round(100 * sif_count / total, 1) if total else 0.0,
-        "high_priority_reports": high_count,
-        "top_life_saving_rule": top_rule[0] if top_rule else None,
-        "top_barrier_failure": top_barrier_name,
-        "trend": trend,
-        "recent_high_priority": [
-            _detail(r, pool=recent_pool, similar_limit=3) for r in recent
-        ],
-        "patterns": [],
-        "latest_report_at": latest_created.isoformat() if latest_created else None,
-        "note": note,
-    }
+        return {
+            "total_reports": total,
+            "sif_potential_reports": sif_count,
+            "sif_density": round(100 * sif_count / total, 1) if total else 0.0,
+            "high_priority_reports": high_count,
+            "top_life_saving_rule": top_rule[0] if top_rule else None,
+            "top_barrier_failure": top_barrier_name,
+            "trend": trend,
+            "recent_high_priority": [
+                _detail(r, pool=recent_pool, similar_limit=3) for r in recent
+            ],
+            "patterns": [],
+            "latest_report_at": latest_created.isoformat() if latest_created else None,
+            "note": note,
+        }
+    
+    return _get_cached("overview", _compute_overview)
 
 
 @router.get("/life-saving-rules", summary="Life-Saving Rule distribution")
 def life_saving_rules(db: Session = Depends(get_db)):
-    rows = db.execute(
-        select(Analysis.life_saving_rule, func.count(Analysis.id))
-        .where(Analysis.life_saving_rule.is_not(None))
-        .group_by(Analysis.life_saving_rule)
-        .order_by(func.count(Analysis.id).desc())
-    ).all()
-    sif_total = (
-        db.scalar(select(func.count(Analysis.id)).where(Analysis.sif_potential.is_(True))) or 0
-    )
-    rules = []
-    for name, count in rows:
-        rules.append(
-            {
-                "rule": name,
-                "count": count,
-                "percentage": round(100 * count / sif_total, 1) if sif_total else 0.0,
-            }
-        )
-    return {"rules": rules, "sif_total": sif_total, "note": "Percentages are of SIF-potential reports."}
+    def _compute_rules():
+        # Combine rule distribution and SIF total in single query
+        rows = db.execute(
+            select(
+                Analysis.life_saving_rule,
+                func.count(Analysis.id).label('count'),
+                func.sum(func.cast(Analysis.sif_potential, Integer)).label('sif_count')
+            )
+            .where(Analysis.life_saving_rule.is_not(None))
+            .group_by(Analysis.life_saving_rule)
+            .order_by(func.count(Analysis.id).desc())
+        ).all()
+        
+        sif_total = sum(row.sif_count or 0 for row in rows)
+        
+        rules = []
+        for name, count, sif_count in rows:
+            rules.append(
+                {
+                    "rule": name,
+                    "count": count,
+                    "percentage": round(100 * (sif_count or 0) / sif_total, 1) if sif_total else 0.0,
+                }
+            )
+        return {"rules": rules, "sif_total": sif_total, "note": "Percentages are of SIF-potential reports."}
+    
+    return _get_cached("life_saving_rules", _compute_rules)
 
 
 @router.get("/sites", summary="Site risk analytics")

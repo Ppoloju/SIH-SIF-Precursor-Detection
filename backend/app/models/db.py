@@ -47,12 +47,18 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
     "reports": {
         "source": "VARCHAR(64)",
         "processing_status": "VARCHAR(16) DEFAULT 'analyzed'",
+        "source_id": "VARCHAR(64)",
     },
     "analyses": {
         "summary": "TEXT",
         "suggested_actions": _JSON_TYPE,
         "languages": _JSON_TYPE,
         "uncertainty_note": "TEXT",
+        "location": "VARCHAR(128)",
+        "equipment": _JSON_TYPE,
+        "unsafe_type": "VARCHAR(32)",
+        "rule_conditions": _JSON_TYPE,
+        "modified_fields": _JSON_TYPE,
     },
 }
 

@@ -120,10 +120,11 @@ export default function ReportDetailPage() {
         barrier_failure: a.barrier_failure ?? [],
         life_saving_rule: a.life_saving_rule,
         activity: a.activity,
-        location: null,
-        equipment: [],
-        unsafe_type: report.report_type ?? null,
+        location: a.location ?? null,
+        equipment: a.equipment ?? [],
+        unsafe_type: a.unsafe_type ?? report.report_type ?? null,
         evidence: a.evidence ?? [],
+        rule_conditions: a.rule_conditions ?? [],
         explanation: a.explanation,
         recommended_follow_up: a.recommended_follow_up,
         summary: a.summary,
@@ -155,7 +156,7 @@ export default function ReportDetailPage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="font-mono text-2xl font-extrabold tracking-tight">
-                  {report.report_id}
+                  {report.source_id ?? report.report_id}
                 </h1>
                 <ReviewBadge status={report.review_status} />
                 {report.is_demo ? (
@@ -173,6 +174,9 @@ export default function ReportDetailPage() {
                 <MetaChip label="Date" value={report.date ?? "not set"} />
                 <MetaChip label="Site" value={report.site ?? "not set"} />
                 {a?.activity && <MetaChip label="Activity" value={a.activity} />}
+                {report.source_id && (
+                  <MetaChip label="File ID" value={report.source_id} />
+                )}
               </div>
             </div>
           </div>
@@ -188,6 +192,32 @@ export default function ReportDetailPage() {
         </div>
       </div>
 
+      {/* File-provided values that replaced the AI extraction (crosscheck) */}
+      {a?.modified_fields && a.modified_fields.length > 0 && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-xs leading-relaxed text-amber-900">
+          <p className="flex flex-wrap items-center gap-1.5 font-bold uppercase tracking-wider text-amber-800">
+            <PenLine size={12} /> File data used &amp; crosschecked
+          </p>
+          <ul className="mt-1.5 space-y-1">
+            {a.modified_fields.map((m) => (
+              <li key={`${m.field}-${m.used}`}>
+                <b className="capitalize">{m.field.replace("_", " ")}</b>: file says{" "}
+                “{m.used}”
+                {m.changed && m.ai ? (
+                  <>
+                    {" "}
+                    <span className="font-semibold">— Modified = Y</span> (AI had
+                    extracted “{m.ai}”)
+                  </>
+                ) : (
+                  <span> — taken from the file</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <div className="card">
@@ -197,7 +227,7 @@ export default function ReportDetailPage() {
             </p>
           </div>
 
-          {result && <AnalysisResultCard result={result} heading={`AI Analysis — ${report.report_id}`} />}
+          {result && <AnalysisResultCard result={result} heading={`AI Analysis — ${report.source_id ?? report.report_id}`} />}
 
           {report.similar_reports.length > 0 && (
             <div className="card">

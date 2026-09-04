@@ -50,25 +50,22 @@ def extract_hazards(text: str, matches: list[IndicatorMatch]) -> list[str]:
     return hazards
 
 
-def _term_negated(lower: str, term: str) -> bool:
-    """Generic barrier terms only count when a failure is signalled nearby.
+def _term_failed(lower: str, term: str) -> bool:
+    """A generic barrier term counts as failed only when a failure word sits
+    in its clause-bounded neighbourhood (e.g. "LOTO was applied" must NOT add
+    a barrier failure, but "LOTO tag was missing" / "guard removed" must).
 
-    e.g. "LOTO was applied" must NOT add a barrier failure, but
-    "LOTO tag was missing" must.
+    Word-block handling (from rule_mapper) stops "guard" inside "guardrails"
+    from flagging Machine Guarding, and clause boundaries stop "without a
+    harness … and the scaffold lacked guardrails" from flagging the wrong
+    barrier group.
     """
-    for nullify in lx.NULLIFY_PHRASES:
-        if nullify in lower:
-            lower = lower.replace(nullify, "")
-    start = 0
-    while True:
-        pos = lower.find(term, start)
-        if pos == -1:
-            break
-        window = lower[max(0, pos - 60) : pos + len(term) + 60]
-        if any(tok in window for tok in lx.NEGATION_TOKENS):
-            return True
-        start = pos + len(term)
-    return False
+    from app.services.rule_mapper import _negated_window, _occurrences
+
+    return any(
+        _negated_window(lower, pos, len(term))
+        for pos in _occurrences(lower, term)
+    )
 
 
 def extract_barrier_failures(text: str, matches: list[IndicatorMatch]) -> list[str]:
@@ -92,7 +89,7 @@ def extract_barrier_failures(text: str, matches: list[IndicatorMatch]) -> list[s
     for barrier, terms in lx.BARRIER_TERMS.items():
         if barrier in barriers:
             continue
-        if any(_term_negated(lower, t) for t in terms):
+        if any(_term_failed(lower, t) for t in terms):
             barriers.append(barrier)
     return barriers
 
@@ -106,31 +103,31 @@ def extract_equipment(text: str) -> list[str]:
     return equipment
 
 
-def extract_location(text: str) -> str | None:
-    """Explicit location phrases when stated; otherwise None."""
+def extract_location(text: str) -> tuple[str | None, str | None]:
+    """Best-effort work-area location, and the term that suggested it.
+
+    Returns (label, evidence_term). The label is ``None`` when the report
+    never describes a place. The evidence term lets the caller explain that
+    the location was *inferred from the text* rather than stated outright
+    (e.g. "roof" -> "Roof / elevated work area").
+    """
     lower = text.lower()
-    patterns = [
-        ("loading bay", "Loading bay"),
-        ("control room", "Control room"),
-        ("pump room", "Pump room"),
-        ("workshop", "Workshop"),
-        ("yard", "Yard"),
-        ("rooftop", "Rooftop"),
-    ]
-    for term, label in patterns:
+    for term, label in lx.LOCATION_TERMS:
         if term in lower:
-            return label
-    return None
+            return label, term
+    return None, None
 
 
 def extract_all(
     text: str, matches: list[IndicatorMatch]
 ) -> dict:
+    location, location_term = extract_location(text)
     return {
         "activity": extract_activity(text),
         "hazards": extract_hazards(text, matches),
         "barrier_failure": extract_barrier_failures(text, matches),
         "equipment": extract_equipment(text),
-        "location": extract_location(text),
+        "location": location,
+        "location_evidence": location_term,
         "unsafe_type": classify_act_condition(text),
     }

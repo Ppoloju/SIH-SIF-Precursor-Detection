@@ -30,6 +30,8 @@ import {
   BarChart,
   CartesianGrid,
   Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -117,6 +119,7 @@ export default function DashboardPage() {
   const [sites, setSites] = useState<SiteStat[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [chartKind, setChartKind] = useState<"area" | "line" | "bar">("area");
 
   useEffect(() => {
     let cancelled = false;
@@ -473,50 +476,114 @@ export default function DashboardPage() {
               <TrendingUp size={16} className="text-brand-600" /> SIF Precursor
               Trend
             </h2>
-            <span className="text-xs font-medium text-ink-muted">
+            {/* Chart-type switch — area / line / bar */}
+            <div
+              className="flex items-center gap-0.5 rounded-lg border border-brand-200 bg-brand-50/60 p-0.5"
+              role="group"
+              aria-label="Trend chart type"
+            >
+              {(
+                [
+                  ["area", "Area"],
+                  ["line", "Line"],
+                  ["bar", "Bar"],
+                ] as const
+              ).map(([kind, label]) => (
+                <button
+                  key={kind}
+                  onClick={() => setChartKind(kind)}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
+                    chartKind === kind
+                      ? "bg-white text-brand-700 shadow-sm"
+                      : "text-ink-muted hover:text-brand-600"
+                  }`}
+                  aria-pressed={chartKind === kind}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <span className="hidden text-xs font-medium text-ink-muted sm:inline">
               {deltas
-                ? `week of ${deltas.lastPeriod} highlighted`
+                ? `latest week: ${deltas.lastPeriod}`
                 : "last 8 weeks"}
             </span>
           </div>
-          <div className="mt-4 h-64">
+          <div className="mt-4 h-60 sm:h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trend}>
-                <defs>
-                  <linearGradient id="sifFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={C.sif} stopOpacity={0.32} />
-                    <stop offset="100%" stopColor={C.sif} stopOpacity={0.02} />
-                  </linearGradient>
-                  <linearGradient id="allFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={C.all} stopOpacity={0.22} />
-                    <stop offset="100%" stopColor={C.all} stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
-                <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
-                <Tooltip contentStyle={tipStyle} cursor={{ stroke: C.focus, strokeDasharray: "4 4" }} />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={9} />
-                <Area
-                  type="monotone"
-                  dataKey="count"
-                  name="All reports"
-                  stroke={C.all}
-                  strokeWidth={2}
-                  fill="url(#allFill)"
-                  dot={false}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="sif_count"
-                  name="SIF-potential"
-                  stroke={C.sif}
-                  strokeWidth={2.5}
-                  fill="url(#sifFill)"
-                  dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
-                  activeDot={{ r: 5 }}
-                />
-              </AreaChart>
+              {chartKind === "area" ? (
+                <AreaChart data={trend}>
+                  <defs>
+                    <linearGradient id="sifFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.sif} stopOpacity={0.32} />
+                      <stop offset="100%" stopColor={C.sif} stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="allFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.all} stopOpacity={0.22} />
+                      <stop offset="100%" stopColor={C.all} stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
+                  <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+                  <Tooltip contentStyle={tipStyle} cursor={{ stroke: C.focus, strokeDasharray: "4 4" }} />
+                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={9} />
+                  <Area
+                    type="monotone"
+                    dataKey="count"
+                    name="All reports"
+                    stroke={C.all}
+                    strokeWidth={2}
+                    fill="url(#allFill)"
+                    dot={false}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="sif_count"
+                    name="SIF-potential"
+                    stroke={C.sif}
+                    strokeWidth={2.5}
+                    fill="url(#sifFill)"
+                    dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
+                    activeDot={{ r: 5 }}
+                  />
+                </AreaChart>
+              ) : chartKind === "line" ? (
+                <LineChart data={trend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
+                  <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+                  <Tooltip contentStyle={tipStyle} cursor={{ stroke: C.focus, strokeDasharray: "4 4" }} />
+                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={9} />
+                  <Line
+                    type="monotone"
+                    dataKey="count"
+                    name="All reports"
+                    stroke={C.all}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="sif_count"
+                    name="SIF-potential"
+                    stroke={C.sif}
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
+                    activeDot={{ r: 5 }}
+                  />
+                </LineChart>
+              ) : (
+                <BarChart data={trend} barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
+                  <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+                  <Tooltip contentStyle={tipStyle} cursor={{ fill: C.barCursor }} />
+                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={9} />
+                  <Bar dataKey="count" name="All reports" fill={C.all} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                  <Bar dataKey="sif_count" name="SIF-potential" fill={C.sif} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                </BarChart>
+              )}
             </ResponsiveContainer>
           </div>
           {deltas && (

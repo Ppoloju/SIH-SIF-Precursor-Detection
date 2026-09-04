@@ -31,6 +31,46 @@ const CANONICAL_LABELS: { key: keyof FieldMapping; label: string; hint: string }
   { key: "site", label: "Site / location", hint: "Site_name + Location_detail merge automatically" },
   { key: "activity", label: "Activity", hint: "What was happening (maintenance, welding…)" },
   { key: "report_type", label: "Report type", hint: "Unsafe Act / Condition, Near Miss, Incident…" },
+  {
+    key: "report_id",
+    label: "Report ID (from file)",
+    hint: "Kept for display next to the generated ID — handy when several files are uploaded",
+  },
+  {
+    key: "hazard",
+    label: "Hazard",
+    hint: "If the file already classifies the hazard, it is used and crosschecked against the AI (marked Y)",
+  },
+  {
+    key: "consequence",
+    label: "Potential consequence",
+    hint: "File value is used and crosschecked against the AI result (marked Y when different)",
+  },
+  {
+    key: "barrier_failure",
+    label: "Barrier failure",
+    hint: "Comma-separated barriers are used and crosschecked against the AI result",
+  },
+  {
+    key: "location",
+    label: "Location detail",
+    hint: "File location detail is used as an intermediate analysis field",
+  },
+  {
+    key: "equipment",
+    label: "Equipment",
+    hint: "Comma-separated equipment values are used and crosschecked against the AI result",
+  },
+  {
+    key: "unsafe_type",
+    label: "Unsafe type",
+    hint: "File classification is used and crosschecked against the AI result",
+  },
+  {
+    key: "rule",
+    label: "Life-Saving Rule",
+    hint: "If the file already maps the rule, it is used and crosschecked against the AI (marked Y)",
+  },
 ];
 
 const SAMPLE_SOURCE = `[

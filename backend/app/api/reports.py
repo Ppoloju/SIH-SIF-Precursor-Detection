@@ -3,11 +3,11 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_, select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.db import get_db
-from app.models.entities import Analysis, Report
+from app.models.entities import Analysis, Report, Review
 from app.schemas.reports import (
     AnalysisResultOut,
     AnalyzeRequest,
@@ -45,6 +45,10 @@ def _store_analysis(db: Session, report: Report, result: dict) -> Analysis:
         barrier_failure=result["barrier_failure"],
         life_saving_rule=result["life_saving_rule"],
         activity=result["activity"],
+        location=result.get("location"),
+        equipment=result.get("equipment"),
+        unsafe_type=result.get("unsafe_type"),
+        rule_conditions=result.get("rule_conditions"),
         evidence=result["evidence"],
         explanation=result["explanation"],
         recommended_follow_up=result["recommended_follow_up"],
@@ -149,26 +153,45 @@ def list_reports(
     status: str | None = Query(default=None),
     sif: bool | None = Query(default=None),
     q: str | None = Query(default=None, description="Free-text search"),
-    limit: int = Query(default=200, le=500),
+    source: str | None = Query(default=None, description="Source file or dataset"),
+    limit: int = Query(default=500, le=10000),
     db: Session = Depends(get_db),
 ):
+    # Build base query with optimized joins
     stmt = (
         select(Report)
         .options(selectinload(Report.analysis), selectinload(Report.reviews))
         .order_by(Report.date.desc().nullslast(), Report.id.desc())
     )
+    
+    # Apply filters efficiently
     if site:
         stmt = stmt.where(Report.site.ilike(f"%{site}%"))
     if activity:
         stmt = stmt.where(Report.activity.ilike(f"%{activity}%"))
     if q:
         stmt = stmt.where(Report.report_text.ilike(f"%{q}%"))
-    if sif is not None:
-        stmt = stmt.join(Analysis).where(Analysis.sif_potential == sif)
-    if priority:
-        stmt = stmt.join(Analysis).where(Analysis.priority == priority.upper())
-    if rule:
-        stmt = stmt.join(Analysis).where(Analysis.life_saving_rule == rule)
+    if source:
+        stmt = stmt.where(Report.source == source)
+    
+    # Join with Analysis only when needed for filters
+    needs_analysis_join = sif is not None or priority is not None or rule is not None
+    if needs_analysis_join:
+        stmt = stmt.join(Analysis, Analysis.report_id == Report.id)
+        if sif is not None:
+            stmt = stmt.where(Analysis.sif_potential == sif)
+        if priority:
+            stmt = stmt.where(Analysis.priority == priority.upper())
+        if rule:
+            stmt = stmt.where(Analysis.life_saving_rule == rule)
+
+    # Optimize status filtering with subquery instead of any()
+    if status:
+        if status == "pending":
+            # Use NOT EXISTS for better performance than any()
+            stmt = stmt.where(~exists().where(Review.report_id == Report.id))
+        else:
+            stmt = stmt.join(Review, Review.report_id == Report.id).where(Review.decision == status)
 
     reports = db.execute(stmt.limit(limit)).scalars().all()
 
@@ -224,6 +247,10 @@ def reanalyze_report(report_id: int, db: Session = Depends(get_db)):
     analysis.barrier_failure = result["barrier_failure"]
     analysis.life_saving_rule = result["life_saving_rule"]
     analysis.activity = result["activity"]
+    analysis.location = result.get("location")
+    analysis.equipment = result.get("equipment")
+    analysis.unsafe_type = result.get("unsafe_type")
+    analysis.rule_conditions = result.get("rule_conditions")
     analysis.evidence = result["evidence"]
     analysis.explanation = result["explanation"]
     analysis.recommended_follow_up = result["recommended_follow_up"]

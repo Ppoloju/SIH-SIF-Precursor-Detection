@@ -40,7 +40,15 @@ from app.services.analysis_pipeline import analyze_report
 logger = logging.getLogger(__name__)
 
 # Canonical field -> header it was read from (used for provenance only).
-CANONICALS = ["text", "title", "date", "site", "activity", "report_type"]
+# `report_id` is the report's own ID from the source file (kept for display,
+# see Report.source_id). `hazard` / `rule` map straight onto the analysis's
+# AI-extracted hazard / Life-Saving Rule — when the file provides them they
+# replace the AI value and the override is recorded as "modified = Y".
+CANONICALS = [
+    "text", "title", "date", "site", "activity", "report_type", "report_id",
+    "hazard", "consequence", "barrier_failure", "location", "equipment",
+    "unsafe_type", "rule",
+]
 
 MAX_REPORT_TEXT = 20_000
 MAX_ROWS = 10_000
@@ -130,6 +138,50 @@ SYNONYMS: dict[str, list[tuple[str, int]]] = {
         ("kind", 60),
         ("nature of report", 90),
     ],
+    "report_id": [
+        ("report id", 120),
+        ("report no", 115),
+        ("report number", 115),
+        ("id", 70),
+        ("ref no", 110),
+        ("reference no", 105),
+        ("reference", 60),
+        ("incident id", 110),
+        ("incident no", 105),
+        ("incident number", 105),
+        ("observation id", 110),
+        ("observation no", 105),
+        ("near miss id", 110),
+        ("near miss no", 105),
+        ("record id", 100),
+        ("sr no", 100),
+        ("serial no", 90),
+        ("ticket no", 90),
+        ("safety observation no", 110),
+    ],
+    "hazard": [
+        ("hazard", 110),
+        ("hazard category", 120),
+        ("hazard type", 115),
+        ("hazard description", 100),
+        ("potential hazard", 100),
+        ("risk category", 90),
+        ("risk type", 85),
+        ("danger", 60),
+    ],
+    "rule": [
+        ("life saving rule", 130),
+        ("life-saving rule", 130),
+        ("lsr", 120),
+        ("lifesaving rule", 130),
+        ("rule", 70),
+        ("safety rule", 110),
+    ],
+    "consequence": [("potential consequence", 120), ("consequence", 110), ("impact", 70)],
+    "barrier_failure": [("barrier failure", 130), ("failed barrier", 120), ("barrier", 80)],
+    "location": [("location detail", 120), ("specific location", 115), ("work location", 100)],
+    "equipment": [("equipment", 120), ("tool", 70), ("asset", 65)],
+    "unsafe_type": [("unsafe type", 120), ("unsafe act", 110), ("unsafe condition", 110)],
 }
 
 # Free-text hints used by the fallback when no text column is recognized.
@@ -343,6 +395,13 @@ def normalize_row(row: dict[str, Any], mapping: dict[str, str | None],
             return ""
         return _cell(row.get(column))
 
+    def list_field(canonical: str) -> list[str] | None:
+        value = field(canonical)
+        if not value:
+            return None
+        values = [item.strip() for item in re.split(r"[,;|]", value) if item.strip()]
+        return values or None
+
     title = field("title")
     body = field("text")
 
@@ -368,6 +427,17 @@ def normalize_row(row: dict[str, Any], mapping: dict[str, str | None],
         "date": parse_date(row.get(mapping["date"])) if mapping.get("date") else None,
         "site": site[:128] or None,
         "activity": field("activity")[:128] or None,
+        # The file's own ID — stored for display; the internal report_id is
+        # always freshly generated so re-uploaded files never collide.
+        "source_id": field("report_id")[:64] or None,
+        # Optional authoritative structured values for AI-extracted fields.
+        "hazard": field("hazard")[:128] or None,
+        "consequence": field("consequence")[:256] or None,
+        "barrier_failure": list_field("barrier_failure"),
+        "location": field("location")[:128] or None,
+        "equipment": list_field("equipment"),
+        "unsafe_type": field("unsafe_type")[:32] or None,
+        "rule": field("rule")[:64] or None,
     }
 
 
@@ -380,6 +450,73 @@ def next_report_id(db: Session) -> str:
     except ValueError:
         num = 1
     return f"RPT-{num:04d}"
+
+
+# File-provided structured values that authoritatively replace the matching
+# AI text-extraction (canonical -> analysis result field).
+_FILE_OVERRIDE_FIELDS: list[tuple[str, str]] = [
+    ("activity", "activity"),
+    ("hazard", "hazard"),
+    ("consequence", "potential_consequence"),
+    ("barrier_failure", "barrier_failure"),
+    ("location", "location"),
+    ("equipment", "equipment"),
+    ("unsafe_type", "unsafe_type"),
+    ("rule", "life_saving_rule"),
+]
+
+
+def _apply_file_overrides(result: dict, norm: dict) -> list[dict]:
+    """Let file-provided structured values win over the AI text extraction.
+
+    Returns one record per applied value for the UI's "modified = Y" marker:
+    ``{"field", "canonical", "ai", "used", "changed"}`` — ``changed`` is True
+    only when an actual AI value was replaced (the AI value stays available as
+    the crosscheck). If the file overrides the Life-Saving Rule, the rule-
+    condition map (derived for the AI's rule) is cleared so the two never
+    contradict.
+    """
+    modified: list[dict] = []
+    for canonical, field in _FILE_OVERRIDE_FIELDS:
+        provided = norm.get(canonical)
+        if isinstance(provided, str):
+            provided = provided.strip() or None
+        if not provided:
+            continue
+        ai_value = result.get(field)
+        result[field] = provided
+        changed = bool(ai_value) and ai_value != provided
+        if canonical == "rule" and changed:
+            result["rule_conditions"] = []
+        modified.append(
+            {
+                "field": field,
+                "canonical": canonical,
+                "ai": ai_value,
+                "used": provided,
+                "changed": changed,
+            }
+        )
+
+    # Keep the stored summary honest when file values replaced the AI's: the
+    # plain-language narrative was generated from the AI's text analysis, so
+    # say so instead of letting it silently contradict the file fields.
+    changed_entries = [m for m in modified if m["changed"]]
+    if changed_entries:
+        bits = []
+        for m in changed_entries:
+            label = {"activity": "activity", "hazard": "hazard", "life_saving_rule": "life-saving rule"}.get(
+                m["field"], m["field"]
+            )
+            bits.append(
+                f"{label}: file says \u201c{m['used']}\u201d (AI text-analysis had extracted \u201c{m['ai']}\u201d)"
+            )
+        note = (
+            "Data note (modified = Y) \u2014 fields set from the imported file, "
+            "crosschecked against the AI: " + "; ".join(bits) + "."
+        )
+        result["summary"] = ((result.get("summary") or "") + "\n\n" + note).strip()
+    return modified
 
 
 def _import_one_row(
@@ -403,6 +540,7 @@ def _import_one_row(
         date=norm["date"],
         site=norm["site"],
         activity=norm["activity"],
+        source_id=norm["source_id"],
         is_demo=False,
         source=source,
         processing_status="pending",
@@ -417,6 +555,10 @@ def _import_one_row(
         return {"ok": False, "skipped": False, "error": f"{type(exc).__name__}: {exc}"[:400],
                 "report": report}
 
+    # File-provided structured values win over AI extraction; every override
+    # is recorded so the UI can show "modified = Y" with the AI crosscheck.
+    modified_fields = _apply_file_overrides(result, norm)
+
     db.add(
         Analysis(
             report_id=report.id,
@@ -428,6 +570,10 @@ def _import_one_row(
             barrier_failure=result["barrier_failure"],
             life_saving_rule=result["life_saving_rule"],
             activity=result["activity"],
+            location=result.get("location"),
+            equipment=result.get("equipment"),
+            unsafe_type=result.get("unsafe_type"),
+            rule_conditions=result.get("rule_conditions"),
             evidence=result["evidence"],
             explanation=result["explanation"],
             recommended_follow_up=result["recommended_follow_up"],
@@ -435,6 +581,7 @@ def _import_one_row(
             suggested_actions=result.get("suggested_actions"),
             languages=result.get("languages"),
             uncertainty_note=result.get("uncertainty_note"),
+            modified_fields=modified_fields or None,
             model=result["model"],
         )
     )

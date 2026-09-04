@@ -7,6 +7,7 @@ import {
   FileSearch,
   Fingerprint,
   Gauge,
+  HardHat,
   Languages,
   LifeBuoy,
   ListChecks,
@@ -14,8 +15,35 @@ import {
   ShieldCheck,
   ShieldX,
 } from "lucide-react";
-import type { AnalysisResult } from "@/lib/api";
+import type { AnalysisResult, RuleCondition } from "@/lib/api";
 import { PriorityBadge, SifBadge } from "@/components/Badges";
+
+const CONDITION_META: Record<
+  RuleCondition["status"],
+  { label: string; chip: string; icon: React.ElementType; iconCls: string; row: string }
+> = {
+  breached: {
+    label: "Breached",
+    chip: "rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700",
+    icon: ShieldX,
+    iconCls: "bg-red-100 text-red-600",
+    row: "border-red-100 bg-red-50/40",
+  },
+  in_place: {
+    label: "In place",
+    chip: "rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-700",
+    icon: CheckCircle2,
+    iconCls: "bg-green-100 text-green-600",
+    row: "border-green-100 bg-green-50/40",
+  },
+  not_verifiable: {
+    label: "Not verifiable",
+    chip: "rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700",
+    icon: FileSearch,
+    iconCls: "bg-amber-100 text-amber-600",
+    row: "border-amber-100 bg-amber-50/30",
+  },
+};
 
 const LANG_LABELS: Record<string, string> = {
   en: "English",
@@ -199,6 +227,19 @@ export default function AnalysisResultCard({
           <Field icon={Fingerprint} label="Hazard" value={result.hazard} />
           <Field icon={ShieldCheck} label="Activity" value={result.activity} />
           <Field icon={FileSearch} label="Location" value={result.location} />
+          <Field icon={HardHat} label="Equipment">
+            {result.equipment.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {result.equipment.map((e) => (
+                  <span key={e} className="badge border border-brand-100 bg-brand-50 text-brand-700">
+                    {e}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="font-normal text-ink-muted">Not specified</span>
+            )}
+          </Field>
           <Field icon={LifeBuoy} label="Barrier Failure">
             {result.barrier_failure.length ? (
               <div className="flex flex-wrap gap-1.5">
@@ -212,6 +253,72 @@ export default function AnalysisResultCard({
           </Field>
           <Field icon={AlertTriangle} label="Potential Consequence" value={result.potential_consequence} />
         </div>
+
+        {/* Rule-condition map — how the report maps to the Life-Saving Rule */}
+        {result.rule_conditions && result.rule_conditions.length > 0 && (
+          <div className="mt-4 rounded-xl border border-brand-200 bg-white p-4">
+            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-600">
+              <ShieldX size={12} /> Life-Saving-Rule conditions
+              {result.life_saving_rule && (
+                <span className="normal-case text-ink-muted">
+                  — how this report maps to “{result.life_saving_rule}”
+                </span>
+              )}
+            </p>
+            <ul className="mt-3 space-y-1.5">
+              {result.rule_conditions.map((c, i) => {
+                const meta = CONDITION_META[c.status];
+                const StatusIcon = meta.icon;
+                return (
+                  <li
+                    key={i}
+                    className={`flex items-start gap-2.5 rounded-xl border px-3 py-2 ${meta.row}`}
+                  >
+                    <span
+                      className={`mt-0.5 grid h-6 w-6 flex-shrink-0 place-items-center rounded-lg ${meta.iconCls}`}
+                    >
+                      <StatusIcon size={13} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                        <p className="text-sm font-semibold leading-snug text-ink">
+                          {c.condition}
+                        </p>
+                        <span className={meta.chip}>{meta.label}</span>
+                      </div>
+                      {c.evidence.length > 0 ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">
+                            Report says:
+                          </span>
+                          {c.evidence.map((ev) => (
+                            <span
+                              key={ev}
+                              className="rounded-md bg-white px-1.5 py-0.5 text-xs italic leading-relaxed text-ink-soft"
+                            >
+                              “{ev}”
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        c.status === "not_verifiable" && (
+                          <p className="mt-0.5 text-[11px] text-ink-muted">
+                            The report does not mention this requirement.
+                          </p>
+                        )
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="mt-2.5 text-[10.5px] leading-relaxed text-ink-muted">
+              Machine-mapped from the report text against the rule’s conditions
+              — each “Breached” item quotes the exact wording it was inferred
+              from. Validate with HSE before acting.
+            </p>
+          </div>
+        )}
 
         {/* Evidence */}
         {result.evidence.length > 0 && (

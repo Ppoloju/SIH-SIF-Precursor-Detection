@@ -383,6 +383,323 @@ RULES: list[dict] = [
 # Rule priority order (used for tie-breaking and dashboard ordering).
 RULE_ORDER = [r["name"] for r in RULES]
 
+# ---------------------------------------------------------------------------
+# Life-Saving Rule *conditions* — the per-rule requirements the analysis maps
+# the report text against ("map out the conditions of the life-saving rule").
+#
+# Each entry is one requirement/control of the rule:
+#   condition : short requirement label shown to the user
+#   terms     : control words whose presence in the text = the condition was
+#               met — unless a negation / failure word sits nearby, which
+#               flips it to "breached".
+#   breach    : literal phrases that directly signal the condition failed,
+#               even when no control term is present.
+#
+# Statuses produced by rule_mapper.map_rule_conditions:
+#   breached       — the report text shows the requirement was not met
+#   in_place       — the report text shows the control was present/applied
+#   not_verifiable — the report does not mention this requirement at all
+# ---------------------------------------------------------------------------
+RULE_CONDITIONS: dict[str, list[dict]] = {
+    "Energy Isolation": [
+        {
+            "condition": "Lockout / tagout (LOTO) applied and locked before work",
+            "terms": ["lockout", "tagout", "loto"],
+            "breach": ["loto tag was missing", "lockout was missing"],
+        },
+        {
+            "condition": "Energy source isolated and verified at zero energy",
+            "terms": ["isolat", "de-energiz", "depressuriz", "switched off", "zero energy"],
+            "breach": [
+                "without isolating", "failed to isolate", "did not isolate", "not isolated",
+                "no isolation", "without isolation", "bypassed the isolation", "still energized",
+                "still energised", "without de-energiz", "not de-energiz", "without depressuriz",
+                "not depressuriz", "not switched off", "without switching off", "under pressure",
+                "pressurized", "pressurised", "energized circuit", "energised circuit",
+                "live line", "live pipeline",
+            ],
+        },
+        {
+            "condition": "Live-work / line-opening controls and barricading in place",
+            "terms": ["barricade", "caution tape", "barrier"],
+            "breach": [
+                "no barricade", "without barricade", "live wire", "live panel", "live circuit",
+                "exposed live wires", "no permit", "without permit",
+            ],
+        },
+    ],
+    "Confined Space Entry": [
+        {
+            "condition": "Atmosphere / gas testing performed before entry",
+            "terms": ["gas test", "gas testing", "atmospheric test", "gas monitoring", "oxygen level"],
+            "breach": [
+                "without gas test", "without gas testing", "no gas test", "no gas testing",
+                "not tested for gas", "no atmospheric test",
+            ],
+        },
+        {
+            "condition": "Entry authorized (valid confined-space permit)",
+            "terms": ["entry permit", "confined space permit", "permit"],
+            "breach": ["without permit", "without a permit", "no permit", "not authorized", "without authorisation", "without authorization"],
+        },
+        {
+            "condition": "Standby attendant posted during entry",
+            "terms": ["standby man", "standby attendant", "standby person", "attendant", "standby"],
+            "breach": ["no attendant", "without attendant", "no standby"],
+        },
+        {
+            "condition": "Rescue / emergency arrangements ready",
+            "terms": ["rescue equipment", "rescue plan", "rescue team", "tripod", "winch", "rescue"],
+            "breach": ["no rescue equipment", "no rescue plan", "without rescue equipment"],
+        },
+    ],
+    "Hot Work Safety": [
+        {
+            "condition": "Hot work authorized by permit",
+            "terms": ["hot work permit", "welding permit", "permit"],
+            "breach": ["without hot work permit", "no hot work permit"],
+        },
+        {
+            "condition": "Fire watch present during hot work",
+            "terms": ["fire watch", "firewatcher", "fire watcher"],
+            "breach": ["without fire watch", "no fire watch"],
+        },
+        {
+            "condition": "Flammable-vapour / gas testing around the hot work",
+            "terms": ["gas test", "gas testing", "flammable test", "combustible gas"],
+            "breach": ["without gas test", "no gas test", "no gas testing", "not tested for gas"],
+        },
+        {
+            "condition": "Combustibles kept away from the ignition source",
+            "terms": ["housekeeping", "kept clear", "removed combustible"],
+            "breach": ["near fuel", "near the fuel", "near flammable", "near combustible", "close to fuel", "sparks", "cutting torch", "oxy-acetylene"],
+        },
+    ],
+    "Working at Height": [
+        {
+            "condition": "Fall protection (harness / safety line) worn and anchored",
+            "terms": ["harness", "fall protection", "safety net", "safety line", "lifeline"],
+            "breach": ["without a harness", "without harness", "no harness", "no fall protection", "without fall protection", "safety belt not"],
+        },
+        {
+            "condition": "Edge protection / guardrails in place",
+            "terms": ["guardrail", "guard rail", "guardrails", "edge protection", "handrail", "edge"],
+            "breach": ["no guardrails", "lacked guardrails", "without guardrails", "open edge", "open pit", "no edge protection"],
+        },
+        {
+            "condition": "Secure, stable access (ladder / scaffold) used",
+            # A scaffold/ladder is a *place*, not a control — a failure word in
+            # the same clause ("scaffold lacked guardrails") usually refers to
+            # a different condition. Breach is only inferred from matched
+            # failure phrases / literal anchors, and "in place" needs a
+            # positive marker (erected / inspected / …) — mere mention is
+            # reported as "not verifiable".
+            "presence_breach": False,
+            "ok_markers": ["erected", "installed", "inspected", "secured", "stable", "certified", "in place", "well maintained", "complete"],
+            "terms": ["scaffold", "scaffolding", "ladder", "work platform"],
+            "breach": ["climbed the ladder", "without anyone holding", "unsecured ladder", "ladder not secured", "unsafe ladder", "scaffold collapsed", "ladder fell"],
+        },
+        {
+            "condition": "Work area below barricaded / exclusion zone",
+            "terms": ["barricade", "caution tape", "exclusion zone", "safety net"],
+            "breach": ["no barricade", "without barricade"],
+        },
+    ],
+    "Line of Fire": [
+        {
+            "condition": "Personnel kept out of the line of fire",
+            "terms": ["exclusion zone", "barricade", "safe position"],
+            "breach": ["in the path", "line of fire", "under the suspended load", "walked under", "stood under", "near the moving"],
+        },
+        {
+            "condition": "Movement / lift guided by banksman or spotter",
+            "terms": ["banksman", "spotter", "flagman", "signalman"],
+            "breach": ["no banksman", "without banksman", "no spotter", "without spotter"],
+        },
+        {
+            "condition": "Energy / pressure release risk controlled (test venting)",
+            "terms": ["pressure test", "bleed", "vented", "venting"],
+            "breach": ["blowback", "blew off", "whipping", "whipped"],
+        },
+    ],
+    "Safe Mechanical Lifting": [
+        {
+            "condition": "Lifting plan prepared and followed",
+            "terms": ["lifting plan", "lift plan", "method statement"],
+            "breach": ["without lifting plan", "no lifting plan"],
+        },
+        {
+            "condition": "Sling / lifting gear in safe condition (inspected)",
+            "terms": ["sling", "sling inspection", "certified sling", "shackle", "lifting gear"],
+            "breach": ["no sling inspection", "without sling inspection"],
+        },
+        {
+            "condition": "Banksman controls the lift / area cleared",
+            "terms": ["banksman", "signalman", "rigger", "spotter"],
+            "breach": ["no banksman", "without banksman"],
+        },
+        {
+            "condition": "Load within rated capacity / load chart respected",
+            "terms": ["load chart", "rated capacity", "safe working load", "swl"],
+            "breach": ["beyond its rated capacity", "overloaded", "exceeded the load chart", "exceeded its capacity"],
+        },
+    ],
+    "Driving Safety": [
+        {
+            "condition": "Vehicle operated within speed limits",
+            "terms": ["speed limit", "speed"],
+            "breach": ["speeding", "did not follow the speed limit", "exceeded the speed limit", "above the speed limit", "over the speed limit"],
+        },
+        {
+            "condition": "Reversing / blind-spot movements controlled (spotter)",
+            "terms": ["spotter", "mirror", "reversing camera"],
+            "breach": ["no spotter", "without a spotter", "without spotter", "reversing blind", "no reversing alarm"],
+        },
+        {
+            "condition": "Pedestrians segregated from vehicle movements",
+            "terms": ["pedestrian segregation", "walkway", "pedestrian crossing", "barricade"],
+            "breach": ["pedestrian hit", "nearly hit the pedestrian", "almost hit the pedestrian", "vehicle hit the pedestrian", "no pedestrian segregation"],
+        },
+    ],
+    "Toxic Gas Safety": [
+        {
+            "condition": "Gas detection (H2S / toxic) worn and active",
+            "terms": ["gas detector", "h2s detector", "h2s monitor", "gas monitor", "detector"],
+            "breach": ["no gas detector", "without gas detector", "gas detector not worn", "no h2s detector", "detector not worn", "detector not working"],
+        },
+        {
+            "condition": "Atmosphere monitored before and during work",
+            "terms": ["gas monitoring", "atmospheric monitoring", "gas test", "gas testing", "air monitoring"],
+            "breach": ["no gas test", "without gas test", "no monitoring", "not monitored"],
+        },
+        {
+            "condition": "SCBA / escape breathing sets available",
+            "terms": ["scba", "breathing apparatus", "escape set", "escape mask", "air pack"],
+            "breach": ["no scba", "without scba", "no breathing apparatus", "without breathing apparatus"],
+        },
+        {
+            "condition": "Working position relative to wind considered",
+            "terms": ["wind direction", "upwind", "wind sock", "wind"],
+            "breach": ["downwind", "working downwind"],
+        },
+    ],
+    "Bypassing Safety Controls": [
+        {
+            "condition": "Machine guards fitted and in place",
+            "terms": ["machine guard", "safety guard", "guard", "guarding"],
+            "breach": ["guard was removed", "guard removed", "removed the guard", "guard was missing", "guard missing", "guard was bypassed"],
+        },
+        {
+            "condition": "Safety interlocks operational",
+            "terms": ["interlock", "interlocking", "interlock switch"],
+            "breach": ["interlock was defeated", "defeated the interlock", "interlock bypassed", "bypassed the interlock", "interlock disabled"],
+        },
+        {
+            "condition": "Emergency stop / isolation controls available",
+            "terms": ["emergency stop", "e-stop", "emergency switch", "emergency stop button"],
+            "breach": ["emergency stop was bypassed", "emergency stop disabled", "emergency stop removed", "without emergency stop"],
+        },
+        {
+            "condition": "Authorization obtained before overriding controls",
+            "terms": ["authorization", "authorisation", "permit"],
+            "breach": ["without authorization", "without authorisation", "unauthorized", "unauthorised", "no permit", "without permit"],
+        },
+    ],
+    "Work Authorization": [
+        {
+            "condition": "Valid permit to work in place before the job starts",
+            "terms": ["permit to work", "ptw", "work permit", "permit"],
+            "breach": ["without permit", "without a permit", "no permit", "without permit to work", "permit expired", "not authorized", "unauthorized work", "unauthorised work"],
+        },
+        {
+            "condition": "Required gas testing / controls attached to the permit",
+            "terms": ["gas test", "gas testing", "atmospheric test"],
+            "breach": ["no gas test", "without gas test", "no gas testing"],
+        },
+        {
+            "condition": "Excavation / trench protection (shoring) in place",
+            "terms": ["shoring", "trench box", "battering"],
+            "breach": ["without shoring", "no shoring", "unshored", "not shored", "cave in", "collapsed"],
+        },
+    ],
+}
+
+# Extra words that mean a control is broken/absent — used by the condition
+# mapper's presence check (complement to NEGATION_TOKENS, scoped to rule_mapper).
+CONTROL_FAILURE_WORDS = [
+    "damaged", "broken", "defective", "collapsed", "expired", "faulty",
+    "unstable", "absent", "blocked", "jammed", "corroded", "fell",
+    "toppled", "lacked", "lacking", "unsafe", "improper", "not safe",
+    "not proper", "not provided", "not installed", "not fitted", "defeated",
+]
+
+# Non-English negation words (Hinglish / Banglish / roman Assamese) that sit
+# next to an otherwise-English control term and flip its meaning ("harness
+# nahi" = no harness). The condition mapper treats these like negation tokens.
+FOREIGN_NEGATION_TOKENS = [
+    "nahi", "nhi", "bina", "chara", "hoyni", "kora hoyni", "nokori",
+    "nokora", "nokorakoi", "nipindha", "nipindhakoi", "nai thakil", "nai",
+    "jodi na", "chilo na", "pora hoyni", "hata diya", "khule diye",
+]
+
+# Location inference: context word -> canonical work-area label. Used when the
+# report never states a location outright but clearly describes one.
+LOCATION_TERMS: list[tuple[str, str]] = [
+    ("loading bay", "Loading bay"),
+    ("control room", "Control room"),
+    ("pump room", "Pump room"),
+    ("pump house", "Pump room"),
+    ("compressor room", "Compressor room"),
+    ("compressor house", "Compressor room"),
+    ("workshop", "Workshop"),
+    ("rooftop", "Roof / elevated work area"),
+    ("on the roof", "Roof / elevated work area"),
+    ("roof", "Roof / elevated work area"),
+    ("scaffolding", "Elevated work area (scaffold)"),
+    ("scaffold", "Elevated work area (scaffold)"),
+    ("tank farm", "Tank farm"),
+    ("storage tank", "Storage tank area"),
+    ("inside the tank", "Storage tank area"),
+    ("within the tank", "Storage tank area"),
+    ("tank", "Storage tank area"),
+    ("vessel", "Vessel area"),
+    ("manhole", "Confined-space entry point (manhole)"),
+    ("pipeline", "Pipeline area"),
+    ("piping", "Pipeline area"),
+    ("excavation", "Excavation area"),
+    ("excavating", "Excavation area"),
+    ("trench", "Excavation area (trench)"),
+    ("open pit", "Open pit / excavation"),
+    ("pit", "Pit / excavation area"),
+    ("yard", "Yard"),
+    ("access road", "Access road"),
+    ("highway", "Public highway"),
+    ("road", "Access road"),
+    ("jetty", "Jetty / dock"),
+    ("wharf", "Jetty / dock"),
+    ("dock", "Dock area"),
+    ("rig floor", "Rig floor"),
+    ("rig site", "Rig site"),
+    ("well site", "Well site"),
+    ("well pad", "Well pad"),
+    ("drilling rig", "Drilling rig area"),
+]
+
+# Fallback activity when the report text never says what work was happening but
+# the mapped Life-Saving Rule makes the activity obvious.
+RULE_TO_ACTIVITY: dict[str, str] = {
+    "Energy Isolation": "Isolation / LOTO work",
+    "Confined Space Entry": "Confined-space entry",
+    "Hot Work Safety": "Hot work",
+    "Working at Height": "Working at height",
+    "Line of Fire": "Load / equipment movement",
+    "Safe Mechanical Lifting": "Lifting operations",
+    "Driving Safety": "Driving",
+    "Toxic Gas Safety": "Work in a toxic-gas environment",
+    "Bypassing Safety Controls": "Machine operation / maintenance",
+    "Work Authorization": "Permit-required work",
+}
+
 # Generic barrier vocabulary — aggregated into barrier_failure output.
 BARRIER_TERMS: dict[str, list[str]] = {
     "Energy Isolation / LOTO": ["loto", "lockout", "tagout", "isolat"],
