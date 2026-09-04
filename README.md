@@ -57,7 +57,7 @@ An **AI Safety Early-Warning & SIF Precursor Intelligence Platform** that:
                ▼
 ┌──────────────────────────────┐
 │        PostgreSQL            │
-│ (Supabase or local Docker;   │
+│ (local Docker or SQLite;     │
 │  SQLite fallback for demo)   │
 │ reports / analyses / reviews │
 │ life_saving_rules / embeddings
@@ -99,7 +99,7 @@ An **AI Safety Early-Warning & SIF Precursor Intelligence Platform** that:
 **Frontend:** Next.js (App Router) · React · Tailwind CSS · Recharts · Lucide React
 **Backend:** Python · FastAPI · Pydantic v2 · SQLAlchemy
 **AI/NLP:** Rule-based NLP + multilingual lexicons (primary) · Llama via Groq (optional) · scikit-learn / Sentence Transformers (optional, when labeled data/keys available)
-**Database:** Supabase PostgreSQL (auto-fallback to local SQLite)
+**Database:** Local PostgreSQL or SQLite fallback
 **Docs:** standalone `docs/index.html` showcase · `docs/MANUAL_TESTING.md` step-by-step QA checklist
 
 ## Repository Structure
@@ -189,8 +189,6 @@ pip install "psycopg[binary]" openpyxl     # PostgreSQL driver + XLSX ingestion
 uvicorn app.main:app --reload --port 8000  # creates schema + seeds demo data in Postgres
 ```
 
-Supabase: paste your Supabase PostgreSQL `DATABASE_URL` instead. The backend code path is identical — only the connection string changes.
-
 ### 2. Frontend
 
 ```bash
@@ -216,8 +214,7 @@ open docs/index.html
 |---|---|---|
 | `GROQ_API_KEY` | No | Optional LLM refinement (Llama via Groq). Without it, rule-based analysis runs. |
 | `SEED_DEMO_DATA` | No | `1` (default) seeds 45 synthetic demo reports when the DB is empty; `0` keeps it empty for real imports. |
-| `SUPABASE_URL` / `SUPABASE_ANON_KEY` | No | Reserved for Supabase data-API integration. |
-| `DATABASE_URL` | No | PostgreSQL URL (Supabase or `docker compose`). Defaults to local SQLite (`sqlite:///./sif_detection.db`) when unset. |
+| `DATABASE_URL` | No | PostgreSQL URL for the local Docker database. Defaults to local SQLite (`sqlite:///./sif_detection.db`) when unset. |
 | `NEXT_PUBLIC_API_URL` | No | Frontend → backend base URL. |
 
 Never commit real credentials. Never commit a `.env` file.

@@ -20,7 +20,7 @@ On first start the app creates tables and seeds **45 clearly-labeled synthetic d
 
 The app runs on whatever `DATABASE_URL` points at (see `.env.example` at the repo root):
 
-- **PostgreSQL** (recommended real flow) — Supabase connection string, or local:
+- **PostgreSQL** (recommended real flow) — local Docker database:
   `docker compose up -d` in the repo root, then `DATABASE_URL=postgresql+psycopg://sif:sif@localhost:5432/sif_detection`. Requires `pip install "psycopg[binary]"`.
 - **SQLite** (zero-setup demo) — default `sqlite:///./sif_detection.db`.
 
@@ -76,7 +76,7 @@ scripts/
 
 - **LLM refinement (Llama via Groq):** set `GROQ_API_KEY`. Output is Pydantic-validated; any failure falls back to the deterministic result.
 - **Embeddings / scikit-learn:** optional extras (commented in `requirements.txt`) for deeper ML once labeled data exists — the shipped similar-report search and feedback loop are dependency-free.
-- **Supabase PostgreSQL:** set `DATABASE_URL`; otherwise local SQLite is used so the demo runs out of the box.
+- **Local PostgreSQL:** set `DATABASE_URL`; otherwise local SQLite is used so the demo runs out of the box.
 
 ## Design notes
 
