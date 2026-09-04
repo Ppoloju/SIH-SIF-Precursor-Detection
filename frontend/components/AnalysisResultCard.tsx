@@ -38,10 +38,10 @@ const CONDITION_META: Record<
   },
   not_verifiable: {
     label: "Not verifiable",
-    chip: "rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700",
+    chip: "rounded-full border border-amber-300/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700",
     icon: FileSearch,
-    iconCls: "bg-amber-100 text-amber-600",
-    row: "border-amber-100 bg-amber-50/30",
+    iconCls: "bg-white text-amber-600 ring-1 ring-amber-300/70",
+    row: "border-amber-300/50",
   },
 };
 
@@ -79,6 +79,100 @@ function Field({
   );
 }
 
+const FACTOR_META: Record<
+  string,
+  { label: string; hint: string; max: number }
+> = {
+  indicators: {
+    label: "Matched SIF indicators",
+    hint: "Number of precursor indicators found in the text (capped at 3)",
+    max: 3,
+  },
+  severity: {
+    label: "Consequence severity",
+    hint: "+2 when the potential consequence mentions fatality / serious injury, else +1",
+    max: 2,
+  },
+  exposure: {
+    label: "People exposure",
+    hint: "+1 when the report shows people were exposed (workers/actors present)",
+    max: 1,
+  },
+  barrier_failure: {
+    label: "Barrier failure",
+    hint: "+1 when a control was missing, defeated or bypassed",
+    max: 1,
+  },
+};
+
+function ScoreBreakdown({
+  factors,
+  priority,
+}: {
+  factors: Record<string, number>;
+  priority: string | null;
+}) {
+  const entries = Object.entries(factors).filter(([, v]) => v > 0);
+  const total = Object.values(factors).reduce((s, v) => s + v, 0);
+  const tiers =
+    priority === "HIGH"
+      ? "5+ → HIGH · 3–4 → MEDIUM · below → LOW"
+      : priority === "MEDIUM"
+        ? "3–4 → MEDIUM (HIGH needs 5+)"
+        : "below 3 → LOW";
+  return (
+    <div className="mt-3 rounded-xl border border-brand-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-600">
+          <Fingerprint size={12} /> Priority score — how it was calculated
+        </p>
+        <span className="text-[11px] font-semibold text-ink-muted">
+          total <b className="text-brand-700">{total}</b> → threshold: {tiers}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {entries.length === 0 && (
+          <p className="text-xs text-ink-muted sm:col-span-2">
+            No factors contributed — the report scored below the LOW threshold.
+          </p>
+        )}
+        {entries.map(([key, value]) => {
+          const meta = FACTOR_META[key];
+          if (!meta) return null;
+          const bar = Math.min(100, Math.round((value / meta.max) * 100));
+          return (
+            <div
+              key={key}
+              className="rounded-lg border border-brand-100 bg-brand-50/40 px-3 py-2"
+              title={meta.hint}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-ink">{meta.label}</span>
+                <span className="rounded-md bg-brand-100 px-1.5 py-0.5 font-mono text-[11px] font-extrabold text-brand-700">
+                  +{value}
+                </span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-brand-100">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-600"
+                  style={{ width: `${bar}%` }}
+                />
+              </div>
+              <p className="mt-1 text-[10.5px] leading-snug text-ink-muted">
+                {meta.hint}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[10.5px] leading-relaxed text-ink-muted">
+        Additive prototype score — not an official OIL risk methodology.
+        Requires HSE validation before acting on the priority.
+      </p>
+    </div>
+  );
+}
+
 export default function AnalysisResultCard({
   result,
   heading = "AI Analysis",
@@ -87,6 +181,14 @@ export default function AnalysisResultCard({
   heading?: string;
 }) {
   const pct = result.confidence != null ? Math.round(result.confidence * 100) : null;
+
+  // “Data note (modified = Y) …” flags duplicate what the Field Coverage panel
+  // already states and are not surfaced in the UI anymore.
+  const note =
+    result.uncertainty_note &&
+    !result.uncertainty_note.startsWith("Data note")
+      ? result.uncertainty_note
+      : null;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-brand-100 bg-brand-50/60 shadow-card">
@@ -177,6 +279,15 @@ export default function AnalysisResultCard({
             </div>
           </div>
         </div>
+
+        {/* Priority score breakdown — transparent, additive, explainable */}
+        {result.priority_factors &&
+          Object.keys(result.priority_factors).length > 0 && (
+            <ScoreBreakdown
+              factors={result.priority_factors}
+              priority={result.priority}
+            />
+          )}
 
         {/* Languages detected */}
         {result.languages?.length > 0 && (
@@ -376,9 +487,9 @@ export default function AnalysisResultCard({
           </div>
         )}
 
-        {result.uncertainty_note && (
-          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
-            <b>⚠️ Review flag:</b> {result.uncertainty_note}
+        {note && (
+          <div className="mt-3 rounded-lg border border-amber-300 bg-white p-3 text-xs leading-relaxed text-amber-900">
+            <b>⚠️ Review flag:</b> {note}
           </div>
         )}
       </div>

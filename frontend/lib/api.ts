@@ -65,6 +65,7 @@ export interface Analysis {
   suggested_actions: string[] | null;
   languages: string[] | null;
   uncertainty_note: string | null;
+  priority_factors: Record<string, number> | null;
   model: string | null;
 }
 
@@ -168,6 +169,31 @@ export interface EvalCase {
   languages_detected: string[];
 }
 
+export interface CvFold extends ConfusionMetrics {
+  fold: number;
+  n: number;
+  sif_positive: number;
+  languages: string;
+}
+
+export interface CvAggregate {
+  mean: number;
+  std: number;
+  min: number;
+  max: number;
+  ci95_low: number;
+  ci95_high: number;
+}
+
+export interface CrossValidation {
+  k: number;
+  n_cases: number;
+  folds: CvFold[];
+  aggregate: Record<"precision" | "recall" | "f1" | "accuracy", CvAggregate>;
+  runtime_ms: number;
+  methodology: string;
+}
+
 export interface EvaluationReport {
   generated_at: string;
   dataset: { name: string; total: number; note?: string };
@@ -178,6 +204,7 @@ export interface EvaluationReport {
   cases: EvalCase[];
   runtime_ms: number;
   methodology: string;
+  cross_validation?: CrossValidation | null;
 }
 
 export interface LearnedSignal {

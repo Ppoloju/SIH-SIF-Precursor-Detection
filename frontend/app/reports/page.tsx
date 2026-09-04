@@ -243,15 +243,6 @@ export default function ReportsPage() {
             ? "Manual entry"
             : s
       : "";
-  // "Modified = Y": the file's structured value replaced an AI-extracted one.
-  const hasModification = (r: ReportDetail) =>
-    (r.analysis?.modified_fields ?? []).some((m) => m.changed);
-  const modifiedLabel = (r: ReportDetail) =>
-    (r.analysis?.modified_fields ?? [])
-      .filter((m) => m.changed)
-      .map((m) => `${m.field} → “${m.used}” (AI: “${m.ai}”)`)
-      .join(" · ");
-
   const sites = useMemo(() => Array.from(new Set(reports.map((r) => r.site).filter(Boolean))).sort(), [reports]);
   const activities = useMemo(
     () =>
@@ -346,7 +337,6 @@ export default function ReportsPage() {
       r.processing_status === "failed"
         ? "Analysis failed"
         : REVIEW_LABELS[r.review_status],
-    "Modified (Y/N)": hasModification(r) ? "Y" : "N",
     Date: r.date ?? "",
     Type: r.report_type ?? "",
     Site: r.site ?? "",
@@ -665,7 +655,6 @@ export default function ReportsPage() {
                 <th className="px-4 py-3 font-semibold">Priority</th>
                 <th className="px-4 py-3 font-semibold">Life-Saving Rule</th>
                 <th className="px-4 py-3 font-semibold">Barrier Failure</th>
-                <th className="px-4 py-3 font-semibold">Mod.</th>
                 <th
                   className="px-4 py-3 font-semibold"
                   title="Possible duplicate — the same report text stored more than once (re-reported incident / file imported twice)"
@@ -684,13 +673,13 @@ export default function ReportsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={14} className="px-4 py-12 text-center">
+                  <td colSpan={13} className="px-4 py-12 text-center">
                     <Loader2 className="mx-auto animate-spin text-brand-500" size={24} />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-4 py-12 text-center text-sm text-ink-muted">
+                  <td colSpan={13} className="px-4 py-12 text-center text-sm text-ink-muted">
                     No reports match the current filters.
                   </td>
                 </tr>
@@ -708,7 +697,7 @@ export default function ReportsPage() {
                         {r.report_id}
                       </Link>
                       {r.is_demo && (
-                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
+                        <span className="ml-2 rounded-full border border-amber-300/70 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
                           demo
                         </span>
                       )}
@@ -773,16 +762,6 @@ export default function ReportsPage() {
                         : "—"}
                     </td>
                     <td className="px-4 py-3">
-                      {hasModification(r) ? (
-                        <span
-                          title={`File value replaced AI extraction — ${modifiedLabel(r)}`}
-                          className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-[10px] font-extrabold text-amber-700"
-                        >
-                          Y
-                        </span>
-                      ) : (
-                        <span className="text-xs text-ink-muted">—</span>
-                      )}
                     </td>
                     <td className="px-4 py-3">
                       {dupInfo ? (

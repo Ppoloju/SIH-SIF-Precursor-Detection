@@ -4,7 +4,7 @@ import time
 
 from fastapi import APIRouter, Query
 
-from app.services.evaluation import run_evaluation
+from app.services.evaluation import run_evaluation, run_kfold_cv
 
 router = APIRouter(prefix="/api/evaluation", tags=["evaluation"])
 
@@ -19,7 +19,12 @@ def evaluation(fresh: bool = Query(default=False, description="Force recompute")
     now = time.time()
     if fresh or _cache["payload"] is None or now - _cache["at"] > _TTL_SECONDS:
         _cache["at"] = now
-        _cache["payload"] = run_evaluation()
+        base = run_evaluation()
+        # Stratified 5-fold stability over the same golden set (~30 ms extra,
+        # cached with the rest).
+        base["cross_validation"] = run_kfold_cv(5)
+        _cache["at"] = now
+        _cache["payload"] = base
     payload = dict(_cache["payload"])
     payload["cached"] = now - _cache["at"] < _TTL_SECONDS
     return payload

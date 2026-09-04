@@ -123,6 +123,10 @@ export default function DashboardPage() {
   const [chartKind, setChartKind] = useState<
     "area" | "line" | "bar" | "composed"
   >("area");
+  // Counts vs density metric for the same underlying trend data.
+  const [chartMetric, setChartMetric] = useState<"counts" | "density">(
+    "counts"
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -164,6 +168,18 @@ export default function DashboardPage() {
   }, []);
 
   const trend = useMemo(() => overview?.trend ?? [], [overview]);
+
+  // Density view reuses the same weekly trend: SIF-potential ÷ reports × 100.
+  const densityTrend = useMemo(
+    () =>
+      trend.map((t) => ({
+        ...t,
+        density:
+          t.count > 0 ? Math.round((100 * (t.sif_count ?? 0)) / t.count) : 0,
+      })),
+    [trend]
+  );
+  const densityMode = chartMetric === "density";
 
   // Real week-over-week deltas from the last two periods of the trend.
   const deltas = useMemo(() => {
@@ -436,7 +452,7 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="card flex items-center gap-3 !p-4">
-          <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600">
+          <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700">
             <Repeat size={18} />
           </span>
           <div className="min-w-0">
@@ -479,38 +495,71 @@ export default function DashboardPage() {
               <TrendingUp size={16} className="text-brand-600" /> SIF Precursor
               Trend
             </h2>
-            {/* Chart-type switch — area / line / bar / composed (bar + line) */}
-            <div
-              className="flex items-center gap-0.5 rounded-lg border border-brand-200 bg-brand-50/60 p-0.5"
-              role="group"
-              aria-label="Trend chart type"
-            >
-              {(
-                [
-                  ["area", "Area"],
-                  ["line", "Line"],
-                  ["bar", "Bar"],
-                  ["composed", "Bar + line"],
-                ] as const
-              ).map(([kind, label]) => (
-                <button
-                  key={kind}
-                  onClick={() => setChartKind(kind)}
-                  title={
-                    kind === "composed"
-                      ? "Bar for all reports with the SIF-potential overlaid as a line"
-                      : `Show the trend as a ${label.toLowerCase()} chart`
-                  }
-                  className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
-                    chartKind === kind
-                      ? "bg-white text-brand-700 shadow-sm"
-                      : "text-ink-muted hover:text-brand-600"
-                  }`}
-                  aria-pressed={chartKind === kind}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* Metric toggle — counts or SIF density % (same underlying data) */}
+              <div
+                className="flex items-center gap-0.5 rounded-lg border border-brand-200 bg-brand-50/60 p-0.5"
+                role="group"
+                aria-label="Trend metric"
+              >
+                {(
+                  [
+                    ["counts", "Counts"],
+                    ["density", "Density %"],
+                  ] as const
+                ).map(([metric, label]) => (
+                  <button
+                    key={metric}
+                    onClick={() => setChartMetric(metric)}
+                    title={
+                      metric === "density"
+                        ? "SIF-potential ÷ all reports per week, as a percentage"
+                        : "Raw weekly report counts"
+                    }
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
+                      chartMetric === metric
+                        ? "bg-white text-brand-700 shadow-sm"
+                        : "text-ink-muted hover:text-brand-600"
+                    }`}
+                    aria-pressed={chartMetric === metric}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {/* Chart-type switch — area / line / bar / composed (bar + line) */}
+              <div
+                className="flex items-center gap-0.5 rounded-lg border border-brand-200 bg-brand-50/60 p-0.5"
+                role="group"
+                aria-label="Trend chart type"
+              >
+                {(
+                  [
+                    ["area", "Area"],
+                    ["line", "Line"],
+                    ["bar", "Bar"],
+                    ["composed", "Bar + line"],
+                  ] as const
+                ).map(([kind, label]) => (
+                  <button
+                    key={kind}
+                    onClick={() => setChartKind(kind)}
+                    title={
+                      kind === "composed"
+                        ? "Bar for all reports with the SIF-potential overlaid as a line"
+                        : `Show the trend as a ${label.toLowerCase()} chart`
+                    }
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
+                      chartKind === kind
+                        ? "bg-white text-brand-700 shadow-sm"
+                        : "text-ink-muted hover:text-brand-600"
+                    }`}
+                    aria-pressed={chartKind === kind}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
             <span className="hidden text-xs font-medium text-ink-muted sm:inline">
               {deltas
@@ -521,7 +570,7 @@ export default function DashboardPage() {
           <div className="mt-4 h-60 sm:h-64">
             <ResponsiveContainer width="100%" height="100%">
               {chartKind === "area" ? (
-                <AreaChart data={trend}>
+                <AreaChart data={densityMode ? densityTrend : trend}>
                   <defs>
                     <linearGradient id="sifFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={C.sif} stopOpacity={0.32} />
@@ -537,78 +586,119 @@ export default function DashboardPage() {
                   <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
                   <Tooltip contentStyle={tipStyle} cursor={{ stroke: C.focus, strokeDasharray: "4 4" }} />
                   <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={9} />
-                  <Area
-                    type="monotone"
-                    dataKey="count"
-                    name="All reports"
-                    stroke={C.all}
-                    strokeWidth={2}
-                    fill="url(#allFill)"
-                    dot={false}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="sif_count"
-                    name="SIF-potential"
-                    stroke={C.sif}
-                    strokeWidth={2.5}
-                    fill="url(#sifFill)"
-                    dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
-                    activeDot={{ r: 5 }}
-                  />
+                  {densityMode ? (
+                    <Area
+                      type="monotone"
+                      dataKey="density"
+                      name="SIF density (%)"
+                      stroke={C.sif}
+                      strokeWidth={2.5}
+                      fill="url(#sifFill)"
+                      dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  ) : (
+                    <>
+                      <Area
+                        type="monotone"
+                        dataKey="count"
+                        name="All reports"
+                        stroke={C.all}
+                        strokeWidth={2}
+                        fill="url(#allFill)"
+                        dot={false}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="sif_count"
+                        name="SIF-potential"
+                        stroke={C.sif}
+                        strokeWidth={2.5}
+                        fill="url(#sifFill)"
+                        dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </>
+                  )}
                 </AreaChart>
               ) : chartKind === "line" ? (
-                <LineChart data={trend}>
+                <LineChart data={densityMode ? densityTrend : trend}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
                   <Tooltip contentStyle={tipStyle} cursor={{ stroke: C.focus, strokeDasharray: "4 4" }} />
                   <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={9} />
-                  <Line
-                    type="monotone"
-                    dataKey="count"
-                    name="All reports"
-                    stroke={C.all}
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="sif_count"
-                    name="SIF-potential"
-                    stroke={C.sif}
-                    strokeWidth={2.5}
-                    dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
-                    activeDot={{ r: 5 }}
-                  />
+                  {densityMode ? (
+                    <Line
+                      type="monotone"
+                      dataKey="density"
+                      name="SIF density (%)"
+                      stroke={C.sif}
+                      strokeWidth={2.5}
+                      dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  ) : (
+                    <>
+                      <Line
+                        type="monotone"
+                        dataKey="count"
+                        name="All reports"
+                        stroke={C.all}
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="sif_count"
+                        name="SIF-potential"
+                        stroke={C.sif}
+                        strokeWidth={2.5}
+                        dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </>
+                  )}
                 </LineChart>
               ) : chartKind === "composed" ? (
-                <ComposedChart data={trend} barGap={2}>
+                <ComposedChart data={densityMode ? densityTrend : trend} barGap={2}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
                   <Tooltip contentStyle={tipStyle} cursor={{ fill: C.barCursor }} />
                   <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={9} />
-                  <Bar dataKey="count" name="All reports" fill={C.all} radius={[4, 4, 0, 0]} maxBarSize={18} />
-                  <Line
-                    type="monotone"
-                    dataKey="sif_count"
-                    name="SIF-potential"
-                    stroke={C.sif}
-                    strokeWidth={2.5}
-                    dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
-                    activeDot={{ r: 5 }}
-                  />
+                  {densityMode ? (
+                    <Bar dataKey="density" name="SIF density (%)" fill={C.sif} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                  ) : (
+                    <>
+                      <Bar dataKey="count" name="All reports" fill={C.all} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                      <Line
+                        type="monotone"
+                        dataKey="sif_count"
+                        name="SIF-potential"
+                        stroke={C.sif}
+                        strokeWidth={2.5}
+                        dot={{ r: 3, fill: C.sif, strokeWidth: 0 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </>
+                  )}
                 </ComposedChart>
               ) : (
-                <BarChart data={trend} barGap={2}>
+                <BarChart data={densityMode ? densityTrend : trend} barGap={2}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 11 }} stroke={C.axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
                   <Tooltip contentStyle={tipStyle} cursor={{ fill: C.barCursor }} />
                   <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" iconSize={9} />
-                  <Bar dataKey="count" name="All reports" fill={C.all} radius={[4, 4, 0, 0]} maxBarSize={18} />
-                  <Bar dataKey="sif_count" name="SIF-potential" fill={C.sif} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                  {densityMode ? (
+                    <Bar dataKey="density" name="SIF density (%)" fill={C.sif} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                  ) : (
+                    <>
+                      <Bar dataKey="count" name="All reports" fill={C.all} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                      <Bar dataKey="sif_count" name="SIF-potential" fill={C.sif} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                    </>
+                  )}
                 </BarChart>
               )}
             </ResponsiveContainer>
