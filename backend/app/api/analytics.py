@@ -23,7 +23,10 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 # Simple in-memory cache for analytics endpoints
 _cache: dict = {}
-_TTL_SECONDS = 60  # Cache analytics for 60 seconds
+_TTL_SECONDS = 5  # Cache analytics for 5 seconds
+
+def clear_cache():
+    _cache.clear()
 
 
 def _get_cached(key: str, compute_fn):
@@ -93,31 +96,30 @@ def overview(db: Session = Depends(get_db)):
                 barrier_counter[b] += 1
         top_barrier_name = barrier_counter.most_common(1)[0][0] if barrier_counter else None
 
-        # Optimize trend calculation with single query instead of 16 separate queries
+        # Optimize trend calculation with single query
         today = date.today()
         trend_start = today - timedelta(days=56)  # 8 weeks back
-        
-        week_expr = func.date_trunc('week', Report.date).label('week')
-        trend_data = db.execute(
+
+        trend_rows = db.execute(
             select(
-                week_expr,
-                func.count(Report.id).label('total'),
-                func.count(Analysis.id).filter(Analysis.sif_potential.is_(True)).label('sif_count')
+                Report.date,
+                Analysis.sif_potential
             )
             .outerjoin(Analysis, Analysis.report_id == Report.id)
             .where(Report.date >= trend_start)
-            .group_by(week_expr)
-            .order_by(week_expr)
         ).all()
-        
-        # Build trend from aggregated data
-        trend_map = {
-            row.week.date() if hasattr(row.week, "date") else row.week: {
-                "total": row.total,
-                "sif_count": row.sif_count,
-            }
-            for row in trend_data
-        }
+
+        # Build trend map grouped by week start (Monday)
+        trend_map = defaultdict(lambda: {"total": 0, "sif_count": 0})
+        for r_date, sif_pot in trend_rows:
+            if r_date:
+                # If r_date is string or datetime.date
+                d = r_date if isinstance(r_date, date) else date.fromisoformat(str(r_date))
+                week_start = d - timedelta(days=d.weekday())
+                trend_map[week_start]["total"] += 1
+                if sif_pot:
+                    trend_map[week_start]["sif_count"] += 1
+
         trend: list[dict] = []
         for week in range(8, 0, -1):
             start = today - timedelta(days=week * 7)

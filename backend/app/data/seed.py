@@ -13,6 +13,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
+from app.api.reports import _store_analysis
 from app.config import get_settings
 from app.data.demo_reports import demo_report_rows
 from app.data.life_saving_rules import rule_seed_rows
