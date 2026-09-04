@@ -54,6 +54,7 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "suggested_actions": _JSON_TYPE,
         "languages": _JSON_TYPE,
         "uncertainty_note": "TEXT",
+        "priority_factors": _JSON_TYPE,
         "location": "VARCHAR(128)",
         "equipment": _JSON_TYPE,
         "unsafe_type": "VARCHAR(32)",

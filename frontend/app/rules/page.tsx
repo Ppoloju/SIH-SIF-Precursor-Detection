@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ShieldX } from "lucide-react";
+import { AlertTriangle, ArrowRight, ShieldX } from "lucide-react";
 import { api } from "@/lib/api";
 import type { RuleStat } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
@@ -58,34 +58,41 @@ export default function RulesPage() {
       <div className="card">
         <div className="space-y-3">
           {rules.map((r) => (
-            <div key={r.rule} className="flex items-center gap-4">
-              <Link
-                href={`/reports?rule=${encodeURIComponent(r.rule)}`}
-                className="w-48 shrink-0 truncate text-sm font-semibold text-ink hover:text-brand-700 hover:underline"
-                title={r.rule}
-              >
-                <ShieldX size={13} className="mr-1 inline text-brand-500" />
-                {r.rule}
-              </Link>
-              <div className="h-6 flex-1 overflow-hidden rounded-lg bg-brand-50">
-                <div
-                  className="flex h-full items-center rounded-lg bg-gradient-to-r from-brand-400 to-brand-600 pl-2 text-[11px] font-bold text-white"
+            <Link
+              key={r.rule}
+              href={`/reports?rule=${encodeURIComponent(r.rule)}`}
+              title={`Open all ${r.count} reports mapped to “${r.rule}” in the Reports registry`}
+              className="group -mx-2 flex items-center gap-4 rounded-xl border border-transparent px-2 py-1.5 transition hover:border-brand-200 hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            >
+              <span className="flex w-48 shrink-0 items-center gap-1 truncate text-sm font-semibold text-ink transition group-hover:text-brand-700">
+                <ShieldX size={13} className="shrink-0 text-brand-500" />
+                <span className="truncate">{r.rule}</span>
+              </span>
+              <span className="h-6 flex-1 overflow-hidden rounded-lg bg-brand-50">
+                <span
+                  className="flex h-full items-center rounded-lg bg-gradient-to-r from-brand-400 to-brand-600 pl-2 text-[11px] font-bold text-white transition group-hover:from-brand-500 group-hover:to-brand-700"
                   style={{ width: `${Math.max((r.count / max) * 100, 4)}%` }}
                 >
                   {r.count}
-                </div>
-              </div>
-              <span className="w-20 shrink-0 text-right font-mono text-xs text-ink-muted">
-                {r.percentage}%
+                </span>
               </span>
-            </div>
+              <span className="flex w-24 shrink-0 items-center justify-end gap-1 font-mono text-xs text-ink-muted transition group-hover:text-brand-700">
+                {r.percentage}%
+                <ArrowRight
+                  size={13}
+                  className="shrink-0 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100"
+                />
+              </span>
+            </Link>
           ))}
           {rules.length === 0 && (
             <p className="py-8 text-center text-sm text-ink-muted">No rule data yet.</p>
           )}
         </div>
         <p className="mt-4 text-[11px] text-ink-muted">
-          Percentages are of {sifTotal} SIF-potential reports.
+          Percentages are of {sifTotal} SIF-potential reports. Click any
+          Life-Saving Rule — its name, bar or count — to open all of its
+          reports in the registry, already filtered.
         </p>
       </div>
     </div>

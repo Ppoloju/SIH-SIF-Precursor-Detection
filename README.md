@@ -86,6 +86,26 @@ An **AI Safety Early-Warning & SIF Precursor Intelligence Platform** that:
 | **Feedback → retraining** | Every HSE review is stored as a labeled example; *Train on reviewed labels* measures model↔human agreement and learns signals from the disagreements, which tune future analyses. |
 | **Human** | HSE professionals make the final call through the review workflow. |
 
+## Algorithms Used
+
+Everything below runs offline, is deterministic and explainable — the optional LLM only polishes output.
+
+| # | Algorithm / method | What it does | Where it lives |
+|---|---|---|---|
+| 1 | **Negation-aware rule matching** | Keyword + phrase patterns per Life-Saving Rule, matched with negation detection (“without isolation”, “no permit”, “missing guard”) so a control that is *present* is not flagged as breached. Quotes the exact evidence phrase. | `safety_lexicon.py`, `sif_detector.py` |
+| 2 | **Additive priority scoring** | `score = min(matched_indicators, 3) + severity_bonus(0–2) + people_exposure(0–1) + barrier_failure(0–1)`; HIGH ≥ 5, MEDIUM ≥ 3, else LOW. Confidence = `0.62 + 0.11·indicators + 0.05·severity`, capped at 0.97. The four factors are stored per report and shown as a “how it was calculated” breakdown. | `risk_scorer.py` |
+| 3 | **Life-Saving-Rule classification** | Per-condition mapping of the text to each rule's requirements with a `breached / in_place / not_verifiable` verdict and per-condition evidence. | `rules` engine + `rule_conditions` |
+| 4 | **Rule estimation from structured fields** | When the file/text gives no Life-Saving Rule signal, the rule is estimated from the file's own hazard/activity values (e.g. hazard “confined space entry” → Confined Space Entry) and the derivation is stated in the uncertainty note. | `ingest.py` (`estimate_rule_from_fields`) |
+| 5 | **Language detection (multilingual)** | Script detection for Devanagari / Bengali / Assamese plus romanised Hinglish / Benglish lexicons; the same failure phrases map to the same rules across languages. | `languages` in the analysis pipeline |
+| 6 | **Hybrid similarity linking** | Similar-report score from token overlap (normalised word-level similarity) **plus** shared rule / hazard / barrier / activity concept bonuses (capped low so genuine near-copies outscore distinct-but-related precursors). Scores are shown with the shared fields on the report page. | `similarity.py` |
+| 7 | **Duplicate detection** | Import-time text fingerprinting skips identical rows (reported as “Row N → duplicate of RPT-x”) and near-copies (similarity ≥ 0.88) are flagged as `duplicate_of` on the report detail. | `ingest.py`, `reports.py` (`DUP_SIMILARITY = 0.88`) |
+| 8 | **Feedback → retraining loop** | Every HSE review is stored as a labelled example; “Train on reviewed labels” computes model↔human agreement (precision / recall / F1), mines the surface phrases of disagreements, and applies them as weighted learned signals to future analyses. | `adaptive.py` |
+| 9 | **Honest field inference** | Each field is tagged *Source file* (authoritative), *AI text analysis* (inferred), or *Not stated* — the engine never fabricates values; file-provided values override AI (kept as the crosscheck). | `ingest.py`, `analysis_pipeline.py` |
+| 10 | **Recurring-pattern mining** | Co-occurrence grouping of ≥ 2 SIF-potential reports by rule+activity / rule+barrier / hazard+activity, backed by the real member reports and clickable into the filtered registry. | `analytics.py` (`/patterns`) |
+| 11 | **Trend & density analytics** | Weekly trend bucketing; SIF precursor density = SIF-potential ÷ total reports; week-over-week deltas; chart types area / line / bar / bar+line on the same data. | `analytics.py`, dashboard |
+| 12 | **Evaluation harness + stability CV** | Holdout golden set (35 hand-labelled reports across EN/HI/BN/AS) with per-class and per-rule precision / recall / F1, plus a stratified k-fold stability check (mean ± std and 95% CI over folds stratified by SIF label × language). | `evaluation.py` (`run_evaluation`, `run_kfold_cv`) · page + CLI |
+| 13 | **LLM refinement (optional)** | Llama (Groq) rephrases explanations / summaries / follow-ups with Pydantic-validated output and deterministic fallback when unavailable. | `llm.py` |
+
 ## Features
 
 - **SIF-potential detection** with evidence, hazard, potential consequence, barrier failure, Life-Saving Rule, confidence and a grounded explanation.
@@ -344,17 +364,27 @@ The prototype ships a **real evaluation harness** instead of fabricated numbers:
 
 - **Golden reference set** — 35 hand-labeled reports in `backend/app/data/golden_set.py` covering all ten Life-Saving Rules plus controlled non-SIF cases, including **Hindi, Bengali and Assamese** reports (native + romanised).
 - **Live Evaluation page** (`/evaluation` in the app) and API (`GET /api/evaluation`) report SIF classification (precision / recall / F1 / accuracy / confusion) and **per-Life-Saving-Rule** precision / recall / F1, plus per-language coverage. Runs deterministically (no LLM) in ~35 ms.
-- **CLI:**
+- **Stratified k-fold stability check** — because a single-split number can be lucky, `run_kfold_cv(5)` deals the golden cases round-robin by (SIF label, language) stratum so every fold mirrors the global SIF-positive ratio and language mix, then reports per-fold P/R/F1/accuracy plus **mean ± std, min–max and a 95% CI**. Shown on the Evaluation page and via:
 
 ```bash
 cd backend
-python scripts/evaluate.py          # compact metrics table
-python scripts/evaluate.py --json   # full per-case JSON
+python scripts/evaluate.py --cv 5   # compact + k-fold stability table
+python scripts/evaluate.py --json --cv 5
 ```
 
 - `backend/scripts/verify_engine.py` runs detection-agreement checks on the synthetic demo set; `backend/scripts/verify_ingest.py` exercises the generic-dataset ingestion flow.
-- **Human agreement** — reviewed reports become labeled examples; `POST /api/feedback/train` (or the *Train on reviewed labels* button on the Reports page) recomputes AI↔HSE agreement and mined signals.
+- **Human agreement** — reviewed reports become labeled examples; `POST /api/feedback/train` (or the *Train on reviewed labels* button on the Reports page) recomputes AI↔HSE agreement and mined signals. The same k-fold seams become train/test splits for the adaptive signals once enough reviewed feedback accumulates.
 - Recall matters most: missing a genuine SIF precursor is more serious than an extra false alert. **No claim of accuracy on real OIL data is made** — metrics describe the deterministic rules on the in-repo reference set and require HSE-validated labels to generalize.
+
+### Validating with real data (TSTR roadmap)
+
+The golden set was authored against the same rule lexicon, so perfect scores there prove *consistency*, not *real-world generalization*. The planned external validation ladder (documented here so reviewers see the intent):
+
+1. **TSTR (Train-Synthetic-Test-Real)** — generate synthetic rows from a train split only, train, and evaluate on a *real* holdout (e.g. a manually labeled slice of OSHA / MSHA / Canada-OHS incident text). Synthetic-trained F1 within ~90–95% of real-trained F1 ⇒ the synthetic data has utility.
+2. **Statistical fidelity** — Kolmogorov–Smirnov over numeric fields (exposure/risk scores), chi-square / total-variation distance over categorical fields (rule, activity, barrier), correlation-matrix and Jensen–Shannon comparisons over feature pairs between synthetic and real sets.
+3. **Discriminator test** — train a simple classifier on the real-vs-synthetic task; accuracy near 50% means the synthetic distribution is hard to distinguish; well above chance points to which features to re-generate.
+4. **Near-duplicate audit** — cosine similarity on embeddings plus rule+activity+barrier tuple frequencies, to ensure generation adds diversity rather than near-copies.
+5. **Human expert review** — HSE scores a sample of synthetic reports for plausibility and correct rule mapping (extends the existing feedback loop to generation).
 
 ## Limitations
 

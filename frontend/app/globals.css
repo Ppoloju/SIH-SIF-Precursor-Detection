@@ -258,6 +258,9 @@ html.dark .bg-white\/80 {
 html.dark .bg-white\/85 {
   background-color: rgb(16 26 44 / 0.85);
 }
+html.dark .bg-white\/90 {
+  background-color: rgb(16 26 44 / 0.9);
+}
 html.dark .bg-white\/95 {
   background-color: rgb(16 26 44 / 0.95);
 }
@@ -409,6 +412,9 @@ html.dark .hover\:bg-orange-50:hover {
 html.dark .bg-amber-50 {
   background-color: #2a2008;
 }
+html.dark .bg-amber-100 {
+  background-color: #3a2c0d;
+}
 html.dark .bg-green-50 {
   background-color: #0d2317;
 }
@@ -483,6 +489,9 @@ html.dark .text-violet-700 {
 html.dark .text-violet-800 {
   color: #ddd6fe;
 }
+html.dark .text-slate-500 {
+  color: #94a3b8;
+}
 html.dark .text-slate-600 {
   color: #cbd5e1;
 }
@@ -505,6 +514,9 @@ html.dark .border-orange-500 {
 }
 html.dark .border-amber-200 {
   border-color: #58461a;
+}
+html.dark .border-amber-300\/70 {
+  border-color: rgb(106 82 20 / 0.7);
 }
 html.dark .border-amber-500 {
   border-color: #f59e0b;

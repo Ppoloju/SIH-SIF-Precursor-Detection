@@ -62,6 +62,7 @@ def _store_analysis(db: Session, report: Report, result: dict) -> Analysis:
         suggested_actions=result.get("suggested_actions"),
         languages=result.get("languages"),
         uncertainty_note=result.get("uncertainty_note"),
+        priority_factors=result.get("priority_factors"),
         model=result["model"],
     )
     db.add(analysis)
@@ -355,6 +356,7 @@ def reanalyze_report(report_id: int, db: Session = Depends(get_db)):
     analysis.suggested_actions = result.get("suggested_actions")
     analysis.languages = result.get("languages")
     analysis.uncertainty_note = result.get("uncertainty_note")
+    analysis.priority_factors = result.get("priority_factors")
     analysis.model = result["model"]
 
     # Superseded reviews no longer apply to the fresh result.

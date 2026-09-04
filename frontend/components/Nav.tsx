@@ -40,6 +40,20 @@ const workLinks = [
   { href: "/ingest", label: "Import Data", icon: Upload },
 ];
 
+const PAGE_TITLES: [string, string][] = [
+  ["/", "Dashboard"],
+  ["/review", "HSE Review"],
+  ["/reports", "Reports"],
+  ["/analyze", "Analyze"],
+  ["/ingest", "Import Data"],
+  ["/rules", "Life-Saving Rules"],
+  ["/patterns", "Recurring Patterns"],
+  ["/sites", "Site Risk"],
+  ["/activities", "Activities"],
+  ["/barriers", "Barrier Failures"],
+  ["/evaluation", "Model Evaluation"],
+];
+
 const insightLinks = [
   { href: "/rules", label: "Life-Saving Rules", icon: ShieldCheck },
   { href: "/patterns", label: "Recurring Patterns", icon: Activity },
@@ -113,6 +127,11 @@ export default function Nav() {
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
+  const currentTitle =
+    PAGE_TITLES.find(([p]) =>
+      p === "/" ? pathname === "/" : pathname.startsWith(p)
+    )?.[1] ?? "Dashboard";
+
   const sections = (
     <>
       <div className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
@@ -142,35 +161,25 @@ export default function Nav() {
       </div>
 
       <div className="border-t border-brand-100 p-3">
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50/40 px-3 py-2.5">
-          <div className="min-w-0">
-            {counts.ok ? (
-              <>
-                <p className="flex items-center gap-1.5 text-[11px] font-bold text-green-700">
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-                  </span>
-                  Backend live
-                </p>
-                <p className="mt-0.5 truncate text-[10px] text-ink-muted">
-                  {counts.total} reports · {counts.pending} awaiting review
-                </p>
-              </>
-            ) : (
-              <p className="text-[11px] font-semibold text-ink-muted">
-                Backend offline — start the API
+        <div className="rounded-xl border border-brand-100 bg-brand-50/40 px-3 py-2.5">
+          {counts.ok ? (
+            <>
+              <p className="flex items-center gap-1.5 text-[11px] font-bold text-green-700">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                </span>
+                Backend live
               </p>
-            )}
-          </div>
-          <button
-            onClick={toggleTheme}
-            aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-            title={dark ? "Switch to light mode" : "Switch to dark mode"}
-            className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg border border-brand-200 bg-white text-ink-soft transition hover:bg-brand-50 hover:text-brand-700"
-          >
-            {dark ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
+              <p className="mt-0.5 truncate text-[10px] text-ink-muted">
+                {counts.total} reports · {counts.pending} awaiting review
+              </p>
+            </>
+          ) : (
+            <p className="text-[11px] font-semibold text-ink-muted">
+              Backend offline — start the API
+            </p>
+          )}
         </div>
         <p className="mt-2.5 text-center text-[10px] leading-relaxed text-ink-muted">
           Prototype · AI-assisted · Requires HSE/OIL validation
@@ -181,6 +190,42 @@ export default function Nav() {
 
   return (
     <>
+      {/* ---- Desktop: top header — theme switch lives here ---- */}
+      <header className="sticky top-0 z-30 hidden border-b border-brand-100 bg-white/90 backdrop-blur lg:block">
+        <div className="flex h-14 items-center justify-between gap-3 pl-64 pr-6">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-extrabold tracking-tight text-ink">
+              {currentTitle}
+            </p>
+            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+              SIF Precursor Detection · HSE Intelligence
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {counts.ok && (
+              <span
+                className="hidden items-center gap-1.5 rounded-full border border-brand-100 bg-brand-50/60 px-2.5 py-1 text-[10.5px] font-bold text-green-700 xl:inline-flex"
+                title={`${counts.total} reports · ${counts.pending} awaiting HSE review`}
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                </span>
+                {counts.pending} awaiting HSE review
+              </span>
+            )}
+            <button
+              onClick={toggleTheme}
+              aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+              title={dark ? "Switch to light mode" : "Switch to dark mode"}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-brand-200 bg-white text-ink-soft transition hover:bg-brand-50 hover:text-brand-700"
+            >
+              {dark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+          </div>
+        </div>
+      </header>
+
       {/* ---- Desktop: fixed left rail ---- */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-brand-100 bg-white lg:flex">
         <BrandLink />

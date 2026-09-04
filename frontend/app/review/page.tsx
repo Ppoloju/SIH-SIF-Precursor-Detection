@@ -7,9 +7,11 @@ import {
   BadgeCheck,
   CheckCircle2,
   ClipboardCheck,
+  Clock,
   FileWarning,
   Loader2,
   ShieldAlert,
+  ShieldCheck,
   ThumbsDown,
   UserRound,
 } from "lucide-react";
@@ -143,13 +145,13 @@ export default function ReviewPage() {
           </>
         }
         actions={
-          <label className="flex items-center gap-2 rounded-xl border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-ink-soft">
+          <label className="flex items-center gap-2 rounded-xl border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-ink-soft shadow-sm">
             <UserRound size={13} className="text-brand-600" />
             Reviewer
             <input
               value={reviewer}
               onChange={(e) => setReviewer(e.target.value)}
-              className="w-32 bg-transparent text-xs font-semibold text-ink outline-none focus:border-b focus:border-brand-400"
+              className="w-36 rounded-md bg-brand-50/70 px-2 py-1 text-xs font-semibold text-ink outline-none transition focus:bg-white focus:ring-2 focus:ring-brand-200"
               placeholder="Your name"
             />
           </label>
@@ -172,6 +174,7 @@ export default function ReviewPage() {
         <QueueStat
           label="Awaiting HSE decision"
           value={counts.pending}
+          icon={Clock}
           tone="amber"
           active={view === "pending"}
           onClick={() => setView("pending")}
@@ -180,6 +183,7 @@ export default function ReviewPage() {
         <QueueStat
           label="Verified by HSE"
           value={counts.verified}
+          icon={ShieldCheck}
           tone="green"
           active={view === "verified"}
           onClick={() => setView("verified")}
@@ -188,6 +192,7 @@ export default function ReviewPage() {
         <QueueStat
           label="Rejected · not SIF"
           value={counts.rejected}
+          icon={ThumbsDown}
           tone="orange"
           active={view === "rejected"}
           onClick={() => setView("rejected")}
@@ -196,6 +201,7 @@ export default function ReviewPage() {
         <QueueStat
           label="Analysis failed"
           value={counts.failed}
+          icon={FileWarning}
           tone="red"
           active={false}
           onClick={() => setView("all")}
@@ -225,19 +231,24 @@ export default function ReviewPage() {
           <div className="py-14 text-center">
             {view === "pending" ? (
               <>
-                <p className="text-lg font-bold text-ink">Queue is clear 🎉</p>
+                <p className="flex items-center justify-center gap-2 text-lg font-bold text-ink">
+                  <CheckCircle2 size={20} className="text-green-600" />
+                  Queue is clear
+                </p>
                 <p className="mx-auto mt-1 max-w-md text-sm text-ink-muted">
-                  Every analyzed report has an HSE decision. Import a new
-                  dataset or analyze a single report to create new work here.
+                  Every analyzed report now has an HSE decision. Import a new
+                  dataset to create new work here.
                 </p>
                 <Link href="/ingest" className="btn-ghost mt-4">
                   Import a dataset
                 </Link>
               </>
             ) : (
-              <p className="text-sm text-ink-muted">
-                No reports in this view.
-              </p>
+              <div className="py-4 text-center">
+                <p className="text-sm text-ink-muted">
+                  No reports in this view.
+                </p>
+              </div>
             )}
           </div>
         ) : (
@@ -293,7 +304,7 @@ export default function ReviewPage() {
                         <button
                           onClick={() => decide(r, "confirmed")}
                           disabled={busyId === r.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-xs font-bold text-green-700 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                           title="Confirm the AI SIF-potential verdict — this counts as HSE verified"
                         >
                           {busyId === r.id ? (
@@ -357,6 +368,7 @@ function SifChip({ sif }: { sif: boolean }) {
 function QueueStat({
   label,
   value,
+  icon: Icon,
   tone,
   active,
   onClick,
@@ -364,39 +376,38 @@ function QueueStat({
 }: {
   label: string;
   value: number;
+  icon: React.ElementType;
   tone: "amber" | "green" | "orange" | "red";
   active: boolean;
   onClick: () => void;
   hint: string;
 }) {
-  const toneBg =
+  const toneText =
     tone === "amber"
-      ? "bg-amber-100 text-amber-700"
+      ? "text-amber-600"
       : tone === "green"
-        ? "bg-green-100 text-green-700"
+        ? "text-green-600"
         : tone === "orange"
-          ? "bg-orange-100 text-orange-700"
-          : "bg-red-100 text-red-700";
+          ? "text-orange-600"
+          : "text-red-600";
   return (
     <button
       onClick={onClick}
       title={hint}
       aria-pressed={active}
-      className={`card flex items-start justify-between gap-3 !p-4 text-left transition ${
+      className={`card !p-4 text-left transition ${
         active ? "ring-2 ring-brand-300" : "hover:border-brand-300"
       }`}
     >
-      <span>
-        <span className="block text-[10px] font-bold uppercase tracking-wider text-ink-muted">
-          {label}
-        </span>
-        <span className="mt-1 block text-3xl font-extrabold tracking-tight text-ink">
-          {value}
-        </span>
-        <span className="mt-1 block text-[10px] text-ink-muted">{hint}</span>
+      <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+        <Icon size={13} strokeWidth={2.4} className={toneText} />
+        {label}
       </span>
-      <span className={`grid h-8 w-8 place-items-center rounded-full ${toneBg}`}>
-        <span className="text-sm font-extrabold">{value}</span>
+      <span className="mt-2 block text-3xl font-extrabold tracking-tight text-ink">
+        {value}
+      </span>
+      <span className="mt-1 block text-[10px] leading-relaxed text-ink-muted">
+        {hint}
       </span>
     </button>
   );

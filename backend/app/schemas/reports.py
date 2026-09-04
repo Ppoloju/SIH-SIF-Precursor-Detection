@@ -58,6 +58,7 @@ class AnalysisOut(BaseModel):
     evidence: Optional[list[str]] = None
     rule_conditions: Optional[list[dict[str, Any]]] = None
     modified_fields: Optional[list[dict[str, Any]]] = None
+    priority_factors: dict[str, Any] = {}
     explanation: Optional[str] = None
     recommended_follow_up: Optional[str] = None
     summary: Optional[str] = None

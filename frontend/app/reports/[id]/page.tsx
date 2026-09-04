@@ -146,7 +146,7 @@ export default function ReportDetailPage() {
         model: a.model,
         llm_refined: false,
         uncertainty_note: a.uncertainty_note,
-        priority_factors: {},
+        priority_factors: a.priority_factors ?? {},
       }
     : null;
 
@@ -176,7 +176,7 @@ export default function ReportDetailPage() {
                 </h1>
                 <ReviewBadge status={report.review_status} />
                 {report.is_demo ? (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-600">
+                  <span className="rounded-full border border-amber-300 bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
                     Demo / Synthetic Data
                   </span>
                 ) : report.source && report.source !== "manual" ? (
@@ -231,7 +231,7 @@ export default function ReportDetailPage() {
       {/* Possible duplicate: the closest stored match is a near-copy of this
           report (same wording => same event reported twice / file re-import). */}
       {report.duplicate_of && (
-        <div className="mt-4 flex flex-wrap items-center gap-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-sm text-amber-900">
+        <div className="mt-4 flex flex-wrap items-center gap-2.5 rounded-xl border border-amber-300 bg-white p-3.5 text-sm text-amber-900 shadow-sm">
           <Copy size={16} className="flex-shrink-0" />
           <span className="min-w-0 flex-1">
             <b>Possible duplicate of {report.duplicate_of.report_id}</b>
@@ -243,7 +243,7 @@ export default function ReportDetailPage() {
           </span>
           <Link
             href={`/reports/${report.duplicate_of.id}`}
-            className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-800 transition hover:bg-amber-100"
+            className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-800 transition hover:border-amber-500 hover:text-amber-900"
           >
             Compare with {report.duplicate_of.report_id} →
           </Link>
@@ -264,32 +264,6 @@ export default function ReportDetailPage() {
             The raw text is shown below and no AI verdict exists — use “Re-run AI
             analysis” in the review panel to retry.
           </div>
-        </div>
-      )}
-
-      {/* File-provided values that replaced the AI extraction (crosscheck) */}
-      {a?.modified_fields && a.modified_fields.length > 0 && (
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-xs leading-relaxed text-amber-900">
-          <p className="flex flex-wrap items-center gap-1.5 font-bold uppercase tracking-wider text-amber-800">
-            <PenLine size={12} /> File data used &amp; crosschecked
-          </p>
-          <ul className="mt-1.5 space-y-1">
-            {a.modified_fields.map((m) => (
-              <li key={`${m.field}-${m.used}`}>
-                <b className="capitalize">{m.field.replace("_", " ")}</b>: file says{" "}
-                “{m.used}”
-                {m.changed && m.ai ? (
-                  <>
-                    {" "}
-                    <span className="font-semibold">— Modified = Y</span> (AI had
-                    extracted “{m.ai}”)
-                  </>
-                ) : (
-                  <span> — taken from the file</span>
-                )}
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 
@@ -688,11 +662,10 @@ function FieldCoverageCard({ report }: { report: ReportDetail }) {
         each field was populated
       </h2>
       <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-        Where a field existed in the imported file it is used as the
-        authoritative value (the AI crosscheck is kept and shown as “Modified = Y”
-        when it differs). Where the file is silent, the AI analyses the free
-        text to fill the field. “Not stated” means neither the file nor the
-        narrative provides it — nothing is invented.
+        Where a field exists in the imported file, the file value is used as
+        the authoritative source. Where the file is silent, the AI analyses
+        the free text to fill the field. “Not stated” means neither the file
+        nor the narrative provides it — nothing is invented.
       </p>
       <ul className="mt-3 divide-y divide-brand-50 overflow-hidden rounded-xl border border-brand-100">
         {rows.map((r) => {

@@ -12,7 +12,11 @@ import {
   Target,
   XCircle,
 } from "lucide-react";
-import type { EvaluationReport, RuleMetric } from "@/lib/api";
+import type {
+  CrossValidation,
+  EvaluationReport,
+  RuleMetric,
+} from "@/lib/api";
 import { api } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 
@@ -58,6 +62,38 @@ function MetricCard({
       </div>
       <div className="mt-2 text-3xl font-extrabold tracking-tight text-ink">{value}</div>
       {sub && <div className="mt-1 text-xs text-ink-muted">{sub}</div>}
+    </div>
+  );
+}
+
+function CvSummary({ cv }: { cv: CrossValidation }) {
+  const a = cv.aggregate;
+  return (
+    <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50/40 p-3.5">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+        {(
+          [
+            ["F1", a.f1],
+            ["Precision", a.precision],
+            ["Recall", a.recall],
+            ["Accuracy", a.accuracy],
+          ] as const
+        ).map(([label, m]) => (
+          <span key={label} className="text-xs text-ink-soft">
+            <b className="text-ink">{label}</b>{" "}
+            <span className="font-mono font-bold text-brand-700">
+              {m.mean.toFixed(3)} ± {m.std.toFixed(3)}
+            </span>{" "}
+            <span className="text-[10.5px] text-ink-muted">
+              (range {m.min.toFixed(3)}–{m.max.toFixed(3)}, 95% CI [
+              {m.ci95_low.toFixed(3)}, {m.ci95_high.toFixed(3)}])
+            </span>
+          </span>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
+        {cv.methodology}
+      </p>
     </div>
   );
 }
@@ -164,7 +200,7 @@ export default function EvaluationPage() {
             className={`mt-4 flex flex-wrap items-center gap-3 rounded-2xl border px-4 py-3 ${
               perfect
                 ? "border-green-200 bg-green-50 text-green-800"
-                : "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-amber-300 bg-white text-amber-800"
             }`}
           >
             {perfect ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
@@ -237,6 +273,67 @@ export default function EvaluationPage() {
               </p>
             </div>
           </div>
+
+          {/* Stratified k-fold stability check */}
+          {report.cross_validation && (
+            <div className="card mt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="card-title text-brand-600">
+                  Stratified {report.cross_validation.k}-fold stability check
+                </h2>
+                <span className="text-[11px] text-ink-muted">
+                  {report.cross_validation.n_cases} golden cases · folds mirror
+                  the SIF &amp; language mix
+                </span>
+              </div>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[560px] text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-brand-100 uppercase tracking-wider text-ink-muted">
+                      <th className="px-2 py-1.5">Fold</th>
+                      <th className="px-2 py-1.5">Cases</th>
+                      <th className="px-2 py-1.5">SIF+</th>
+                      <th className="px-2 py-1.5">Precision</th>
+                      <th className="px-2 py-1.5">Recall</th>
+                      <th className="px-2 py-1.5">F1</th>
+                      <th className="px-2 py-1.5">Accuracy</th>
+                      <th className="px-2 py-1.5">Composition (lang × n)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.cross_validation.folds.map((f) => (
+                      <tr
+                        key={f.fold}
+                        className="border-b border-brand-50 last:border-0"
+                      >
+                        <td className="px-2 py-1.5 font-mono font-bold text-brand-700">
+                          {f.fold}
+                        </td>
+                        <td className="px-2 py-1.5">{f.n}</td>
+                        <td className="px-2 py-1.5">{f.sif_positive}</td>
+                        <td className="px-2 py-1.5 font-mono">
+                          {pct(f.precision)}
+                        </td>
+                        <td className="px-2 py-1.5 font-mono">
+                          {pct(f.recall)}
+                        </td>
+                        <td className="px-2 py-1.5 font-mono font-bold text-brand-700">
+                          {f.f1.toFixed(3)}
+                        </td>
+                        <td className="px-2 py-1.5 font-mono">
+                          {pct(f.accuracy)}
+                        </td>
+                        <td className="px-2 py-1.5 text-[10.5px] text-ink-muted">
+                          {f.languages}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <CvSummary cv={report.cross_validation} />
+            </div>
+          )}
 
           {/* Per-rule table */}
           <div className="card mt-4">

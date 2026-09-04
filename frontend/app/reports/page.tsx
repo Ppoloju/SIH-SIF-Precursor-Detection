@@ -563,7 +563,7 @@ export default function ReportsPage() {
               {r.report_id}
             </Link>
             {r.is_demo && (
-              <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
+              <span className="ml-2 rounded-full border border-amber-300/70 bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">
                 demo
               </span>
             )}

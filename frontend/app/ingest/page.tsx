@@ -73,13 +73,6 @@ const CANONICAL_LABELS: { key: keyof FieldMapping; label: string; hint: string }
   },
 ];
 
-const SAMPLE_SOURCE = `[
-  { "Report No": 1, "Date of Incident": "12-05-2026", "Location": "Rig X",
-    "Description": "Technician opened a pressurized line without isolation." },
-  { "Report No": 2, "Date of Incident": "19-06-2026", "Location": "Plant B",
-    "Description": "Crew lifted a load over workers without a banksman." }
-]`;
-
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -429,7 +422,7 @@ export default function IngestPage() {
               )}
 
               {job.failures.length > 0 && (
-                <div className="mt-3 max-h-40 overflow-y-auto rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <div className="mt-3 max-h-40 overflow-y-auto rounded-xl border border-amber-300 bg-white p-3">
                   {job.failures.map((f) => (
                     <p key={f.row} className="text-xs text-amber-800">
                       Row {f.row}: {f.error}
@@ -479,23 +472,14 @@ export default function IngestPage() {
           </div>
 
           <div className="card">
-            <h2 className="card-title">Try it now — paste JSON rows</h2>
-            <p className="mt-1 text-xs text-ink-muted">
-              Runs through the exact same ingestion + classification pipeline:
-            </p>
-            <JsonPasteRow />
-          </div>
-
-          <div className="card">
-            <h2 className="card-title">Any schema works</h2>
-            <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-ink-soft">
-              {SAMPLE_SOURCE}
-            </pre>
-            <p className="mt-2 text-[11px] text-ink-muted">
-              Columns like “Date of Incident”, “Location” and “Description” are
-              detected automatically — no renaming required. HSSE exports
+            <h2 className="card-title">
+              <FileUp size={16} className="text-brand-600" /> No renames needed
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+              Any column layout works. Names like “Date of Incident”, “Location”
+              and “Description” are auto-detected, and HSSE exports
               (Report_id, Site_name, Location_detail, Description, …) map
-              directly.
+              directly to the pipeline.
             </p>
           </div>
         </div>
@@ -525,77 +509,4 @@ function StatBox({ label, value, sub, pink, red }: { label: string; value: strin
   );
 }
 
-function JsonPasteRow() {
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [job, setJob] = useState<IngestJobState | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  async function run() {
-    setError(null);
-    setJob(null);
-    let rows: Record<string, unknown>[];
-    try {
-      rows = JSON.parse(text);
-      if (!Array.isArray(rows) || rows.length === 0) throw new Error("not an array");
-    } catch {
-      setError("Paste a JSON array of row objects.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const start = await api.ingestRows(rows, undefined, "json-paste");
-      const done = await pollJob(start.job_id, setJob);
-      setJob(done);
-      if (done.status === "error") setError(done.error ?? "Import failed");
-      else setText("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Import failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const total = job?.rows_total ?? 0;
-  const processed = job?.processed ?? 0;
-
-  return (
-    <div className="mt-2">
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={5}
-        placeholder='[{"Description": "…", "Site": "…"}]'
-        className="w-full resize-y rounded-xl border border-brand-200 bg-white p-3 font-mono text-[11px] text-ink outline-none focus:border-brand-400"
-      />
-      <button
-        onClick={run}
-        disabled={busy || !text.trim()}
-        className="btn-primary mt-2 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {busy ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
-        Import JSON rows
-      </button>
-      {busy && job && (
-        <div className="mt-2">
-          <div className="flex justify-between text-[10px] font-bold text-ink-muted">
-            <span>Analyzing… {processed}/{total}</span>
-            <span>{total ? Math.round((100 * processed) / total) : 0}%</span>
-          </div>
-          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-brand-100">
-            <div
-              className="h-full bg-brand-500 transition-all duration-500"
-              style={{ width: `${total ? Math.min(100, (100 * processed) / total) : 0}%` }}
-            />
-          </div>
-        </div>
-      )}
-      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-      {job?.status === "done" && (
-        <p className="mt-2 text-xs text-green-700">
-          ✓ Imported {job.imported} rows · {job.sif_potential} SIF · {job.high_priority} high
-        </p>
-      )}
-    </div>
-  );
-}

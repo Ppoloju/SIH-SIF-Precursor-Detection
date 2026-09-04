@@ -635,6 +635,7 @@ def _import_one_row(
             languages=result.get("languages"),
             uncertainty_note=result.get("uncertainty_note"),
             modified_fields=modified_fields or None,
+            priority_factors=result.get("priority_factors"),
             model=result["model"],
         )
     )

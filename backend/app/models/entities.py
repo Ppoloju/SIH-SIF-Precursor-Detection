@@ -86,6 +86,11 @@ class Analysis(Base):
     # value during import: [{"field", "ai", "used", "changed"}]. Lets the UI
     # show "modified = Y" and keep the AI value as the crosscheck.
     modified_fields: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Transparent priority-score breakdown (risk_scorer): the four additive
+    # factors {indicators, severity, exposure, barrier_failure} that produced
+    # the HIGH / MEDIUM / LOW verdict — persisted so the score stays
+    # explainable on stored reports, not just in the live analyze flow.
+    priority_factors: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
