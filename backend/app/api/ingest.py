@@ -41,7 +41,7 @@ from app.services.ingest import (
 
 router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 
-MAX_FILE_BYTES = 15 * 1024 * 1024  # 15 MB
+MAX_FILE_BYTES = 100 * 1024 * 1024  # 100 MB
 SUPPORTED_EXTENSIONS = (".csv", ".tsv", ".txt", ".json", ".xlsx")
 
 settings = get_settings()
@@ -64,7 +64,7 @@ async def _read_upload(file: UploadFile) -> bytes:
         )
     data = await file.read()
     if len(data) > MAX_FILE_BYTES:
-        raise HTTPException(status_code=413, detail="File too large (max 15 MB)")
+        raise HTTPException(status_code=413, detail="File too large (max 100 MB)")
     return data
 
 

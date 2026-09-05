@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Cpu, Database, ShieldAlert } from "lucide-react";
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ||
+  (typeof window !== "undefined" ? "" : "http://127.0.0.1:8000");
 
 export default function Footer() {
   const [db, setDb] = useState<string | null>(null);
