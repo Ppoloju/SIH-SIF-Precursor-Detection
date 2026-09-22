@@ -1,6 +1,8 @@
 # SIH SIF Precursor Detection
 
 **AI/NLP Engine to Detect Serious Injury & Fatality (SIF) Precursors in OIL's Unsafe-Act / Unsafe-Condition and Near-Miss Reports**
+<img width="840" height="859" alt="image" src="https://github.com/user-attachments/assets/ea172f23-c9a2-4f25-82ae-d559c0301f98" />
+
 
 Smart India Hackathon 2026 · Problem Statement **26165** · **Oil India Limited** · Theme: **Smart Automation**
 
