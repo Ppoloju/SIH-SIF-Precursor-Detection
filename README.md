@@ -1,7 +1,6 @@
 # SIH SIF Precursor Detection
 
-![image](https://gifdb.com/images/thumbnail/click-me-icon-2c0fjlsz3a0302zq.gif)
-(https://youtu.be/lswV3pRPiPw)
+[![image](https://gifdb.com/images/thumbnail/click-me-icon-2c0fjlsz3a0302zq.gif)](https://youtu.be/lswV3pRPiPw)
 
 **AI/NLP Engine to Detect Serious Injury & Fatality (SIF) Precursors in OIL's Unsafe-Act / Unsafe-Condition and Near-Miss Reports**
 
